@@ -254,6 +254,7 @@ tr.dragging{opacity:.4;}
     <div class="modal-sub" id="modalDate"></div>
     <div id="printZone"></div>
     <div class="modal-actions">
+      <button class="btn" style="background:#1a1a6e;color:#aad;" onclick="doSavePDF()">💾 Guardar PDF</button>
       <button class="btn btn-print" onclick="doPrint()">🖨 Imprimir</button>
       <button class="btn btn-ghost" onclick="closeModal('overlay')">Cerrar</button>
     </div>
@@ -848,27 +849,30 @@ function imprimirCaja(){
   const w=window.open('','_blank','width=600,height=700');
   w.document.write(`<!DOCTYPE html><html><head><title>${caja.nombre}</title>
   <style>
-    @page{size:letter portrait;margin:18mm 16mm;}
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:Arial,sans-serif;color:#111;font-size:10pt;}
-    .header{border-bottom:3px solid #111;padding-bottom:10px;margin-bottom:14px;}
-    .brand{font-size:18pt;font-weight:900;} .brand span{color:#7c4a1e;}
-    .sub-header{display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px;}
-    .caja-name{font-size:13pt;font-weight:700;color:#0a2a0a;}
-    .caja-turno{font-size:9pt;color:#555;}
-    .meta{font-size:8pt;color:#666;text-align:right;line-height:1.6;}
-    .cajero-box{background:#f5ece0;border:1px solid #c8b99a;border-left:4px solid #7c4a1e;padding:8px 12px;margin-bottom:14px;border-radius:4px;font-size:9.5pt;}
-    table{border-collapse:collapse;width:100%;}
-    th{background:#111;color:white;padding:7px 10px;font-size:8pt;text-transform:uppercase;text-align:center;}
-    th.left{text-align:left;}
-    td{padding:6px 10px;border-bottom:1px solid #eee;font-size:9.5pt;text-align:center;}
-    td.left{text-align:left;}
-    tr:nth-child(even) td{background:#fafafa;}
-    tfoot td{font-weight:700;background:#f0ebe3;border-top:2px solid #111;}
-    .footer{margin-top:20px;padding-top:10px;border-top:1px solid #ccc;display:flex;justify-content:space-between;font-size:8pt;color:#888;}
-    .firma{margin-top:40px;display:flex;justify-content:flex-end;}
-    .firma-box{text-align:center;width:200px;}
-    .firma-line{border-top:1px solid #333;padding-top:5px;font-size:8pt;color:#555;}
+    @page{ size: letter portrait; margin: 12mm 14mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; color: #111; font-size: 9pt; }
+    .header { border-bottom: 2.5px solid #111; padding-bottom: 6px; margin-bottom: 10px; }
+    .brand { font-size: 15pt; font-weight: 900; } .brand span { color: #7c4a1e; }
+    .sub-header { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; }
+    .caja-name { font-size: 11pt; font-weight: 700; color: #0a2a0a; }
+    .caja-turno { font-size: 8pt; color: #555; }
+    .meta { font-size: 7.5pt; color: #666; text-align: right; line-height: 1.5; }
+    .cajero-box { background: #f5ece0; border-left: 3px solid #7c4a1e; padding: 5px 10px;
+                  margin-bottom: 10px; font-size: 8.5pt; }
+    table { border-collapse: collapse; width: 100%; }
+    th { background: #111; color: white; padding: 5px 8px; font-size: 7.5pt;
+         text-transform: uppercase; text-align: center; }
+    th.left { text-align: left; }
+    td { padding: 4px 8px; border-bottom: 1px solid #eee; font-size: 8.5pt; text-align: center; }
+    td.left { text-align: left; }
+    tr:nth-child(even) td { background: #fafafa; }
+    tfoot td { font-weight: 700; background: #f0ebe3; border-top: 2px solid #111; font-size: 9pt; }
+    .footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #ccc;
+              display: flex; justify-content: space-between; font-size: 7pt; color: #888; }
+    .firma { margin-top: 28px; display: flex; justify-content: flex-end; }
+    .firma-box { text-align: center; width: 180px; }
+    .firma-line { border-top: 1px solid #333; padding-top: 4px; font-size: 7.5pt; color: #555; }
   </style></head><body>
   <div class="header">
     <div class="brand">La Vaca <span>Original</span></div>
@@ -885,9 +889,29 @@ function imprimirCaja(){
   </table>
   <div class="footer"><span>La Vaca Original — Inventario</span><span>${caja.nombre} · ${caja.turno}</span></div>
   ${cajero?`<div class="firma"><div class="firma-box"><div class="firma-line">Firma: ${escH(cajero)}</div></div></div>`:''}
-  <scr` + `ipt>window.addEventListener('load',()=>setTimeout(()=>window.print(),300));</scr` + `ipt>
+  <scr`+'ipt>'+`
+  document.getElementById('btnPrint').addEventListener('click',()=>window.print());
+  document.getElementById('btnSave').addEventListener('click',()=>{
+    const html='<!DOCTYPE html>'+document.documentElement.outerHTML;
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='Caja_'+document.title.replace(/ /g,'_')+'.html';
+    a.click();
+  });
+  `+'</scr'+'ipt>'+`
   </body></html>`);
   w.document.close();
+  // Agregar botones de acción en la ventana
+  setTimeout(()=>{
+    try{
+      const div=w.document.createElement('div');
+      div.style.cssText='position:fixed;bottom:16px;right:16px;display:flex;gap:8px;z-index:999;';
+      div.innerHTML='<button id="btnPrint" style="background:#0f0f0f;color:white;border:none;padding:10px 18px;border-radius:6px;font-size:9pt;font-weight:700;cursor:pointer;">🖨 Imprimir</button>'
+        +'<button id="btnSave" style="background:#1a1a6e;color:#aad;border:none;padding:10px 18px;border-radius:6px;font-size:9pt;font-weight:700;cursor:pointer;">💾 Guardar</button>';
+      w.document.body.appendChild(div);
+    }catch(e){}
+  },400);
   closeModal('cajaOverlay');
 }
 
@@ -941,7 +965,87 @@ function buildConsolidadoHTML(){
 
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
-function doPrint(){
+function buildPrintDoc(dt, hp, hv){
+  return `<!DOCTYPE html><html><head><title>Consolidado La Vaca Original</title>
+  <meta charset="UTF-8">
+  <style>
+    @page{ size: letter portrait; margin: 10mm 12mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: white; color: #111; }
+    .sheet { width: 100%; page-break-after: always; page-break-inside: avoid; }
+    .sheet:last-child { page-break-after: avoid; }
+    .sheet-header { margin-bottom: 5mm; }
+    h2 { font-size: 12pt; font-weight: 700; color: #0f0f0f; margin-bottom: 1mm; }
+    .sub { font-size: 7.5pt; color: #888; margin-bottom: 3mm; }
+    .sec { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+           color: #444; padding-bottom: 2mm; border-bottom: 2px solid #0f0f0f; margin-bottom: 3mm; }
+    .tbl-wrap { width: 100%; overflow: hidden; }
+    table { border-collapse: collapse; font-size: 7.5pt; }
+    th { background: #0f0f0f; color: white; padding: 4pt 5pt; font-size: 6.5pt;
+         text-transform: uppercase; text-align: center; border: 1px solid #222; white-space: nowrap; }
+    th.left { text-align: left; }
+    td { padding: 3.5pt 5pt; font-size: 7.5pt; border-bottom: 1px solid #e8e8e8; text-align: center; white-space: nowrap; }
+    td.left { text-align: left; max-width: 120pt; white-space: normal; }
+    tbody tr:nth-child(even) td { background: #f9f9f9; }
+    @media print { .sheet { page-break-after: always; } .sheet:last-child { page-break-after: avoid; } }
+    @media screen { body { padding: 12px; } .sheet { margin-bottom: 30px; border: 1px solid #ddd; padding: 16px; border-radius: 6px; } }
+  </style></head><body>
+  <div class="sheet">
+    <div class="sheet-header">
+      <h2>La Vaca Original — Producción &amp; Stock</h2>
+      <p class="sub">${dt}</p>
+    </div>
+    <div class="sec">Inventario de Producción</div>
+    <div class="tbl-wrap" id="w1">
+      <table id="t1">
+        <thead><tr>
+          <th class="left">Producto</th>
+          <th>Inv. Ant.</th><th>Realizada</th><th>Retorno</th>
+          <th>Disponible</th><th>Dev.</th><th>Disp.Real</th>
+          <th>Inv.Final</th><th>Diferencia</th>
+        </tr></thead>
+        <tbody>${hp}</tbody>
+      </table>
+    </div>
+  </div>
+  <div class="sheet">
+    <div class="sheet-header">
+      <h2>La Vaca Original — Distribución a Ventas</h2>
+      <p class="sub">${dt}</p>
+    </div>
+    <div class="sec">Ventas por Punto</div>
+    <div class="tbl-wrap" id="w2">
+      <table id="t2">
+        <thead>
+          <tr>
+            <th class="left" rowspan="2">Producto</th>
+            <th rowspan="2">Sale</th>
+            <th colspan="2">Autopista</th>
+            <th colspan="2">Boquia</th>
+            <th colspan="2">Tebaida</th>
+            <th rowspan="2">Valle</th><th rowspan="2">Mayor</th>
+            <th rowspan="2">Total</th><th rowspan="2">Balance</th>
+          </tr>
+          <tr><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th></tr>
+        </thead>
+        <tbody>${hv}</tbody>
+      </table>
+    </div>
+  </div>
+  <scr`+'ipt>'+`
+  function fitTable(wid,tid){
+    const w=document.getElementById(wid),t=document.getElementById(tid);
+    if(!w||!t)return;
+    const avail=w.parentElement.offsetWidth||600;
+    const tw=t.offsetWidth;
+    if(tw>avail){const s=avail/tw;t.style.transformOrigin='top left';t.style.transform='scale('+s+')';w.style.height=(t.offsetHeight*s)+'px';}
+  }
+  window.addEventListener('load',function(){fitTable('w1','t1');fitTable('w2','t2');});
+  `+'</scr'+'ipt>'+`
+  </body></html>`;
+}
+
+function getConsolidadoData(){
   rows.forEach(calcRow);
   const now=new Date();
   const fecha=now.toLocaleDateString('es-ES',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -969,65 +1073,53 @@ function doPrint(){
       <td>${r.mayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
       <td style="font-weight:700;color:${bc}">${bt}</td></tr>`;
   });
-  const css=printCSS();
-  const w=window.open('','_blank','width=1050,height=720');
-  w.document.write(`<!DOCTYPE html><html><head><title>Consolidado</title><meta charset="UTF-8"><style>${css}</style></head><body>
-  <div class="page" id="p1">
-    <div class="page-header"><h2>La Vaca Original — Producción &amp; Stock</h2><p class="sub">${dt}</p></div>
-    <div class="sec">Inventario de Producción</div>
-    <div class="scale-wrap"><div class="scale-inner" id="t1wrap">
-      <table><thead><tr>
-        <th class="left">Producto</th><th>Anterior</th><th>Realizada</th><th>Retorno</th>
-        <th>Disponible</th><th>Dev.</th><th>Disp.Real</th><th>Final</th><th>Diferencia</th>
-      </tr></thead><tbody>${hp}</tbody></table>
-    </div></div>
-  </div>
-  <div class="page" id="p2">
-    <div class="page-header"><h2>La Vaca Original — Distribución a Ventas</h2><p class="sub">${dt}</p></div>
-    <div class="sec">Ventas por Punto</div>
-    <div class="scale-wrap"><div class="scale-inner" id="t2wrap">
-      <table><thead>
-        <tr><th class="left" rowspan="2">Producto</th><th rowspan="2">Sale</th>
-          <th colspan="2">Vaca Autopista</th><th colspan="2">Vaca Boquia</th><th colspan="2">Vaca Tebaida</th>
-          <th rowspan="2">Valle</th><th rowspan="2">Mayor</th><th rowspan="2">Total</th><th rowspan="2">Balance</th></tr>
-        <tr><th>Mañana</th><th>Tarde</th><th>Mañana</th><th>Tarde</th><th>Mañana</th><th>Tarde</th></tr>
-      </thead><tbody>${hv}</tbody></table>
-    </div></div>
-  </div>
-  <scr`+`ipt>
-  function autoScale(pid,wid){
-    const pg=document.getElementById(pid),wr=document.getElementById(wid);
-    if(!pg||!wr)return;
-    const aw=pg.querySelector('.scale-wrap').clientWidth;
-    const ah=pg.querySelector('.scale-wrap').clientHeight;
-    const s=Math.min(aw/wr.scrollWidth,ah/wr.scrollHeight,1);
-    wr.style.transform='scale('+s+')';
-  }
-  window.addEventListener('load',function(){autoScale('p1','t1wrap');autoScale('p2','t2wrap');setTimeout(()=>window.print(),600);});
-  </scr`+`ipt></body></html>`);
+  return {dt, hp, hv};
+}
+
+function doPrint(){
+  const {dt,hp,hv}=getConsolidadoData();
+  const html=buildPrintDoc(dt,hp,hv);
+  const w=window.open('','_blank','width=800,height=900');
+  w.document.write(html);
   w.document.close();
+  setTimeout(()=>w.print(),800);
+}
+
+function doSavePDF(){
+  const {dt,hp,hv}=getConsolidadoData();
+  const html=buildPrintDoc(dt,hp,hv);
+  // Crear blob HTML que el usuario puede abrir y guardar como PDF
+  const blob=new Blob([html],{type:'text/html'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const now=new Date();
+  const fname='Vaca_Inventario_'+now.toISOString().slice(0,10)+'.html';
+  a.href=url; a.download=fname; a.click();
+  URL.revokeObjectURL(url);
 }
 
 function printCSS(){return `
-  @page{size:letter landscape;margin:0;}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:Arial,sans-serif;background:white;}
-  .page{width:279mm;height:216mm;padding:7mm 9mm;overflow:hidden;display:flex;flex-direction:column;page-break-after:always;}
-  .page:last-child{page-break-after:avoid;}
-  .page-header{margin-bottom:3mm;flex-shrink:0;}
-  h2{font-size:10pt;font-weight:700;color:#0f0f0f;margin-bottom:1mm;}
-  .sub{font-size:6.5pt;color:#888;margin-bottom:2mm;}
-  .sec{font-size:6pt;font-weight:700;text-transform:uppercase;color:#444;padding-bottom:1.5mm;border-bottom:1.5px solid #0f0f0f;margin-bottom:2.5mm;flex-shrink:0;}
-  .scale-wrap{flex:1;overflow:hidden;display:flex;align-items:flex-start;}
-  .scale-inner{transform-origin:top left;width:max-content;}
-  table{border-collapse:collapse;white-space:nowrap;}
-  th{background:#0f0f0f;color:white;padding:3pt 5pt;font-size:5.8pt;text-transform:uppercase;text-align:center;border:1px solid #222;}
-  th.left{text-align:left;}
-  td{padding:2.5pt 5pt;font-size:6.5pt;border-bottom:1px solid #e8e8e8;text-align:center;}
-  td.left{text-align:left;}
-  tbody tr:nth-child(even) td{background:#f9f9f9;}
-  .modal-section{font-size:.7rem;font-weight:700;text-transform:uppercase;color:#555;margin:14px 0 7px;padding-bottom:3px;border-bottom:1px solid #ccc;}
-  @media print{.page{page-break-after:always;}.page:last-child{page-break-after:avoid;}}
+  @page{ size: letter landscape; margin: 8mm 10mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: white; color: #111; }
+  .sheet { width: 100%; page-break-after: always; }
+  .sheet:last-child { page-break-after: avoid; }
+  .sheet-header { margin-bottom: 4mm; }
+  h2 { font-size: 11pt; font-weight: 700; color: #0f0f0f; margin-bottom: 1mm; }
+  .sub { font-size: 7pt; color: #888; margin-bottom: 3mm; }
+  .sec { font-size: 6.5pt; font-weight: 700; text-transform: uppercase;
+         color: #444; padding-bottom: 2mm; border-bottom: 1.5px solid #0f0f0f; margin-bottom: 3mm; }
+  .tbl-wrap { width: 100%; overflow: hidden; }
+  table { border-collapse: collapse; white-space: nowrap; font-size: 7pt; }
+  th { background: #0f0f0f; color: white; padding: 3.5pt 5pt; font-size: 6pt;
+       text-transform: uppercase; text-align: center; border: 1px solid #222; }
+  th.left { text-align: left; }
+  td { padding: 3pt 5pt; font-size: 6.5pt; border-bottom: 1px solid #e8e8e8; text-align: center; }
+  td.left { text-align: left; }
+  tbody tr:nth-child(even) td { background: #f9f9f9; }
+  .modal-section { font-size: 7pt; font-weight: 700; text-transform: uppercase;
+                   color: #555; margin: 12px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #ccc; }
+  @media print { .sheet { page-break-after: always; } .sheet:last-child { page-break-after: avoid; } }
 `;}
 
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
