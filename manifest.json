@@ -1,0 +1,17 @@
+{
+  "name": "Inventario La Vaca Original",
+  "short_name": "La Vaca",
+  "description": "Control de inventario y ventas — La Vaca Original",
+  "start_url": "./inventario-app.html",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#7c4a1e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%230f0f0f'/><text y='130' x='20' font-size='130'>🐄</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
