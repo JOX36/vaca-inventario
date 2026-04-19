@@ -243,8 +243,7 @@ tr.dragging{opacity:.4;}
     <div class="modal-sub" id="modalDate"></div>
     <div id="printZone"></div>
     <div class="modal-actions">
-      <button class="btn" style="background:#1a1a6e;color:#aad;" onclick="doSavePDF()">💾 Guardar PDF</button>
-      <button class="btn btn-print" onclick="doPrint()">🖨 Imprimir</button>
+      <button class="btn btn-print" onclick="doPrint()">🖨 Imprimir / 💾 Guardar PDF</button>
       <button class="btn btn-ghost" onclick="closeModal('overlay')">Cerrar</button>
     </div>
   </div>
@@ -856,15 +855,7 @@ function imprimirCaja(){
   <div class="footer"><span>La Vaca Original — Inventario</span><span>${caja.nombre} · ${caja.turno}</span></div>
   ${cajero?`<div class="firma"><div class="firma-box"><div class="firma-line">Firma: ${escH(cajero)}</div></div></div>`:''}
   <scr`+'ipt>'+`
-  document.getElementById('btnPrint').addEventListener('click',()=>window.print());
-  document.getElementById('btnSave').addEventListener('click',()=>{
-    const html='<!DOCTYPE html>'+document.documentElement.outerHTML;
-    const blob=new Blob([html],{type:'text/html'});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='Caja_'+document.title.replace(/ /g,'_')+'.html';
-    a.click();
-  });
+  // botones agregados dinámicamente
   `+'</scr'+'ipt>'+`
   </body></html>`);
   w.document.close();
@@ -872,10 +863,10 @@ function imprimirCaja(){
   setTimeout(()=>{
     try{
       const div=w.document.createElement('div');
-      div.style.cssText='position:fixed;bottom:16px;right:16px;display:flex;gap:8px;z-index:999;';
-      div.innerHTML='<button id="btnPrint" style="background:#0f0f0f;color:white;border:none;padding:10px 18px;border-radius:6px;font-size:9pt;font-weight:700;cursor:pointer;">🖨 Imprimir</button>'
-        +'<button id="btnSave" style="background:#1a1a6e;color:#aad;border:none;padding:10px 18px;border-radius:6px;font-size:9pt;font-weight:700;cursor:pointer;">💾 Guardar</button>';
+      div.style.cssText='position:fixed;bottom:16px;right:16px;z-index:999;';
+      div.innerHTML='<button id="btnPrint" style="background:#0f0f0f;color:white;border:none;padding:10px 18px;border-radius:6px;font-size:9pt;font-weight:700;cursor:pointer;">🖨 Imprimir / 💾 PDF</button>';
       w.document.body.appendChild(div);
+      w.document.getElementById('btnPrint').addEventListener('click',()=>w.print());
     }catch(e){}
   },400);
   closeModal('cajaOverlay');
@@ -935,63 +926,49 @@ function buildPrintDoc(dt, hp, hv){
   return `<!DOCTYPE html><html><head><title>Consolidado La Vaca Original</title>
   <meta charset="UTF-8">
   <style>
-    @page{ size: letter portrait; margin: 10mm 12mm; }
+    @page{ size: letter landscape; margin: 8mm 10mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: white; color: #111; }
-    /* Forzar salto de página con todas las propiedades posibles */
+    html, body { background: white; font-family: Arial, sans-serif; color: #111; }
+
+    /* Cada hoja es un bloque independiente */
     .sheet {
-      width: 100%;
-      display: block;
       page-break-after: always;
-      page-break-inside: avoid;
       break-after: page;
-      break-inside: avoid;
+      padding: 0;
+      margin: 0;
     }
-    .sheet:last-child {
-      page-break-after: avoid;
-      break-after: avoid;
-    }
-    .sheet-header { margin-bottom: 5mm; }
-    h2 { font-size: 12pt; font-weight: 700; color: #0f0f0f; margin-bottom: 1mm; }
-    .sub { font-size: 7.5pt; color: #888; margin-bottom: 3mm; }
-    .sec { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-           color: #444; padding-bottom: 2mm; border-bottom: 2px solid #0f0f0f; margin-bottom: 3mm; }
-    .tbl-wrap { width: 100%; overflow: hidden; }
-    table { border-collapse: collapse; font-size: 7.5pt; }
-    th { background: #0f0f0f; color: white; padding: 4pt 5pt; font-size: 6.5pt;
-         text-transform: uppercase; text-align: center; border: 1px solid #222; white-space: nowrap; }
-    th.left { text-align: left; }
-    td { padding: 3.5pt 5pt; font-size: 7.5pt; border-bottom: 1px solid #e8e8e8; text-align: center; white-space: nowrap; }
-    td.left { text-align: left; max-width: 120pt; white-space: normal; }
-    tbody tr:nth-child(even) td { background: #f9f9f9; }
-    @media print {
-      html, body { height: auto; }
-      .sheet {
-        page-break-after: always !important;
-        break-after: page !important;
-        page-break-inside: avoid !important;
-      }
-      .sheet:last-child {
-        page-break-after: avoid !important;
-        break-after: avoid !important;
-      }
-    }
-    @media screen {
-      body { padding: 12px; background: #eee; }
-      .sheet { margin-bottom: 20px; border: 1px solid #ddd; padding: 16px; border-radius: 6px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
-    }
+    .sheet:last-child { page-break-after: avoid; break-after: avoid; }
+
+    .tip { background:#1a1a6e;color:white;padding:7px 14px;font-size:8pt;text-align:center; }
+    @media print { .tip { display:none!important; } }
+
+    .hdr { margin-bottom: 3mm; }
+    h2 { font-size: 10pt; font-weight: 700; margin-bottom: 0.5mm; }
+    .sub { font-size: 6.5pt; color: #888; margin-bottom: 2mm; }
+    .sec { font-size: 6pt; font-weight: 700; text-transform: uppercase;
+           color: #444; padding-bottom: 1.5mm; border-bottom: 1.5px solid #111; margin-bottom: 2mm; }
+
+    /* La tabla se escala con zoom aplicado inline por JS */
+    .zoom-wrap { width: 100%; }
+    table { border-collapse: collapse; white-space: nowrap; }
+    th { background:#111; color:white; padding:3pt 4pt; font-size:5.8pt;
+         text-transform:uppercase; text-align:center; border:1px solid #333; }
+    th.left { text-align:left; }
+    td { padding:2.5pt 4pt; font-size:6.2pt; border-bottom:1px solid #e5e5e5; text-align:center; }
+    td.left { text-align:left; }
+    tbody tr:nth-child(even) td { background:#f7f7f7; }
   </style></head><body>
+
+  <div class="tip">💾 Para guardar como PDF → en el diálogo de impresión selecciona <strong>"Guardar como PDF"</strong></div>
+
   <div class="sheet">
-    <div class="sheet-header">
-      <h2>La Vaca Original — Producción &amp; Stock</h2>
-      <p class="sub">${dt}</p>
-    </div>
+    <div class="hdr"><h2>La Vaca Original — Producción &amp; Stock</h2><p class="sub">${dt}</p></div>
     <div class="sec">Inventario de Producción</div>
-    <div class="tbl-wrap" id="w1">
+    <div class="zoom-wrap" id="w1">
       <table id="t1">
         <thead><tr>
           <th class="left">Producto</th>
-          <th>Inv. Ant.</th><th>Realizada</th><th>Retorno</th>
+          <th>Inv.Ant.</th><th>Realizada</th><th>Retorno</th>
           <th>Disponible</th><th>Dev.</th><th>Disp.Real</th>
           <th>Inv.Final</th><th>Diferencia</th>
         </tr></thead>
@@ -999,23 +976,16 @@ function buildPrintDoc(dt, hp, hv){
       </table>
     </div>
   </div>
-  <!-- Separador forzado entre hojas -->
-  <div style="page-break-after:always;break-after:page;height:0;overflow:hidden;"></div>
+
   <div class="sheet">
-    <div class="sheet-header">
-      <h2>La Vaca Original — Distribución a Ventas</h2>
-      <p class="sub">${dt}</p>
-    </div>
+    <div class="hdr"><h2>La Vaca Original — Distribución a Ventas</h2><p class="sub">${dt}</p></div>
     <div class="sec">Ventas por Punto</div>
-    <div class="tbl-wrap" id="w2">
+    <div class="zoom-wrap" id="w2">
       <table id="t2">
         <thead>
           <tr>
-            <th class="left" rowspan="2">Producto</th>
-            <th rowspan="2">Sale</th>
-            <th colspan="2">Autopista</th>
-            <th colspan="2">Boquia</th>
-            <th colspan="2">Tebaida</th>
+            <th class="left" rowspan="2">Producto</th><th rowspan="2">Sale</th>
+            <th colspan="2">Autopista</th><th colspan="2">Boquia</th><th colspan="2">Tebaida</th>
             <th rowspan="2">Valle</th><th rowspan="2">Mayor</th>
             <th rowspan="2">Total</th><th rowspan="2">Balance</th>
           </tr>
@@ -1025,15 +995,41 @@ function buildPrintDoc(dt, hp, hv){
       </table>
     </div>
   </div>
+
   <scr`+'ipt>'+`
-  function fitTable(wid,tid){
-    const w=document.getElementById(wid),t=document.getElementById(tid);
-    if(!w||!t)return;
-    const avail=w.parentElement.offsetWidth||600;
-    const tw=t.offsetWidth;
-    if(tw>avail){const s=avail/tw;t.style.transformOrigin='top left';t.style.transform='scale('+s+')';w.style.height=(t.offsetHeight*s)+'px';}
+  function zoomFit(wrapId, tableId) {
+    var wrap  = document.getElementById(wrapId);
+    var table = document.getElementById(tableId);
+    if (!wrap || !table) return;
+
+    // Área imprimible landscape carta con márgenes 8mm x 10mm:
+    // Ancho:  279mm - 20mm = 259mm → a 96dpi = 259 * 3.7795 ≈ 979px
+    // Alto:   216mm - 16mm = 200mm → a 96dpi = 200 * 3.7795 ≈ 756px
+    // Restamos espacio del encabezado (~20mm = 75px) y sec (~8mm = 30px)
+    var availW = 979;
+    var availH = 756 - 105; // 105px para hdr + sec
+
+    var tableW = table.scrollWidth;
+    var tableH = table.scrollHeight;
+
+    var scaleW = tableW > availW ? availW / tableW : 1;
+    var scaleH = tableH > availH ? availH / tableH : 1;
+    var scale  = Math.min(scaleW, scaleH); // el más restrictivo gana
+
+    if (scale < 1) {
+      table.style.zoom           = scale;
+      table.style.transformOrigin = 'top left';
+      // Ajustar el wrapper para que no quede espacio vacío
+      wrap.style.height = Math.ceil(tableH * scale) + 'px';
+      wrap.style.overflow = 'hidden';
+    }
   }
-  window.addEventListener('load',function(){fitTable('w1','t1');fitTable('w2','t2');});
+
+  window.addEventListener('load', function() {
+    zoomFit('w1','t1');
+    zoomFit('w2','t2');
+    setTimeout(function(){ window.print(); }, 800);
+  });
   `+'</scr'+'ipt>'+`
   </body></html>`;
 }
@@ -1078,18 +1074,7 @@ function doPrint(){
   setTimeout(()=>w.print(),800);
 }
 
-function doSavePDF(){
-  const {dt,hp,hv}=getConsolidadoData();
-  const html=buildPrintDoc(dt,hp,hv);
-  // Crear blob HTML que el usuario puede abrir y guardar como PDF
-  const blob=new Blob([html],{type:'text/html'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  const now=new Date();
-  const fname='Vaca_Inventario_'+now.toISOString().slice(0,10)+'.html';
-  a.href=url; a.download=fname; a.click();
-  URL.revokeObjectURL(url);
-}
+
 
 function printCSS(){return `
   @page{ size: letter landscape; margin: 8mm 10mm; }
