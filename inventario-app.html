@@ -972,8 +972,19 @@ function buildPrintDoc(dt, hp, hv){
     @page{ size: letter portrait; margin: 10mm 12mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background: white; color: #111; }
-    .sheet { width: 100%; page-break-after: always; page-break-inside: avoid; }
-    .sheet:last-child { page-break-after: avoid; }
+    /* Forzar salto de página con todas las propiedades posibles */
+    .sheet {
+      width: 100%;
+      display: block;
+      page-break-after: always;
+      page-break-inside: avoid;
+      break-after: page;
+      break-inside: avoid;
+    }
+    .sheet:last-child {
+      page-break-after: avoid;
+      break-after: avoid;
+    }
     .sheet-header { margin-bottom: 5mm; }
     h2 { font-size: 12pt; font-weight: 700; color: #0f0f0f; margin-bottom: 1mm; }
     .sub { font-size: 7.5pt; color: #888; margin-bottom: 3mm; }
@@ -987,8 +998,22 @@ function buildPrintDoc(dt, hp, hv){
     td { padding: 3.5pt 5pt; font-size: 7.5pt; border-bottom: 1px solid #e8e8e8; text-align: center; white-space: nowrap; }
     td.left { text-align: left; max-width: 120pt; white-space: normal; }
     tbody tr:nth-child(even) td { background: #f9f9f9; }
-    @media print { .sheet { page-break-after: always; } .sheet:last-child { page-break-after: avoid; } }
-    @media screen { body { padding: 12px; } .sheet { margin-bottom: 30px; border: 1px solid #ddd; padding: 16px; border-radius: 6px; } }
+    @media print {
+      html, body { height: auto; }
+      .sheet {
+        page-break-after: always !important;
+        break-after: page !important;
+        page-break-inside: avoid !important;
+      }
+      .sheet:last-child {
+        page-break-after: avoid !important;
+        break-after: avoid !important;
+      }
+    }
+    @media screen {
+      body { padding: 12px; background: #eee; }
+      .sheet { margin-bottom: 20px; border: 1px solid #ddd; padding: 16px; border-radius: 6px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    }
   </style></head><body>
   <div class="sheet">
     <div class="sheet-header">
@@ -1008,6 +1033,8 @@ function buildPrintDoc(dt, hp, hv){
       </table>
     </div>
   </div>
+  <!-- Separador forzado entre hojas -->
+  <div style="page-break-after:always;break-after:page;height:0;overflow:hidden;"></div>
   <div class="sheet">
     <div class="sheet-header">
       <h2>La Vaca Original — Distribución a Ventas</h2>
