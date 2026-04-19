@@ -926,109 +926,136 @@ function buildPrintDoc(dt, hp, hv){
   return `<!DOCTYPE html><html><head><title>Consolidado La Vaca Original</title>
   <meta charset="UTF-8">
   <style>
-    @page{ size: letter landscape; margin: 8mm 10mm; }
+    @page { size: letter portrait; margin: 8mm 6mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { background: white; font-family: Arial, sans-serif; color: #111; }
+    body { font-family: Arial, sans-serif; color: #111; background: white; }
 
-    /* Cada hoja es un bloque independiente */
+    .tip {
+      background: #1a1a6e; color: white;
+      padding: 6px 12px; font-size: 8pt; text-align: center;
+      margin-bottom: 5mm;
+    }
+    @media print { .tip { display: none !important; } }
+
     .sheet {
       page-break-after: always;
       break-after: page;
-      padding: 0;
-      margin: 0;
+      margin-bottom: 0;
     }
     .sheet:last-child { page-break-after: avoid; break-after: avoid; }
 
-    .tip { background:#1a1a6e;color:white;padding:7px 14px;font-size:8pt;text-align:center; }
-    @media print { .tip { display:none!important; } }
+    .hdr { margin-bottom: 2.5mm; }
+    h2   { font-size: 9pt; font-weight: 700; margin-bottom: 0.5mm; }
+    .sub { font-size: 6pt; color: #888; margin-bottom: 2mm; }
+    .sec {
+      font-size: 5.5pt; font-weight: 700; text-transform: uppercase;
+      color: #444; padding-bottom: 1mm;
+      border-bottom: 1.5px solid #111; margin-bottom: 1.5mm;
+    }
 
-    .hdr { margin-bottom: 3mm; }
-    h2 { font-size: 10pt; font-weight: 700; margin-bottom: 0.5mm; }
-    .sub { font-size: 6.5pt; color: #888; margin-bottom: 2mm; }
-    .sec { font-size: 6pt; font-weight: 700; text-transform: uppercase;
-           color: #444; padding-bottom: 1.5mm; border-bottom: 1.5px solid #111; margin-bottom: 2mm; }
+    /* Sin zoom — la tabla ocupa el 100% del ancho disponible */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed; /* reparte columnas equitativamente */
+    }
+    th {
+      background: #111; color: white;
+      padding: 2.5pt 2pt; font-size: 5pt;
+      text-transform: uppercase; text-align: center;
+      border: 1px solid #333; word-break: break-word;
+    }
+    th.left { text-align: left; }
+    td {
+      padding: 2pt 2pt; font-size: 5.5pt;
+      border-bottom: 1px solid #e0e0e0;
+      text-align: center; word-break: break-word;
+      overflow: hidden;
+    }
+    td.left { text-align: left; }
+    tbody tr:nth-child(even) td { background: #f7f7f7; }
 
-    /* La tabla se escala con zoom aplicado inline por JS */
-    .zoom-wrap { width: 100%; }
-    table { border-collapse: collapse; white-space: nowrap; }
-    th { background:#111; color:white; padding:3pt 4pt; font-size:5.8pt;
-         text-transform:uppercase; text-align:center; border:1px solid #333; }
-    th.left { text-align:left; }
-    td { padding:2.5pt 4pt; font-size:6.2pt; border-bottom:1px solid #e5e5e5; text-align:center; }
-    td.left { text-align:left; }
-    tbody tr:nth-child(even) td { background:#f7f7f7; }
+    /* Anchos fijos por columna — producción */
+    #t1 col.c-name { width: 22%; }
+    #t1 col.c-num  { width: 8.75%; }
+
+    /* Anchos fijos por columna — ventas */
+    #t2 col.c-name { width: 16%; }
+    #t2 col.c-sale { width: 6%; }
+    #t2 col.c-turno{ width: 7%; }
+    #t2 col.c-sm   { width: 6%; }
+    #t2 col.c-bal  { width: 9%; }
   </style></head><body>
 
-  <div class="tip">💾 Para guardar como PDF → en el diálogo de impresión selecciona <strong>"Guardar como PDF"</strong></div>
-
-  <div class="sheet">
-    <div class="hdr"><h2>La Vaca Original — Producción &amp; Stock</h2><p class="sub">${dt}</p></div>
-    <div class="sec">Inventario de Producción</div>
-    <div class="zoom-wrap" id="w1">
-      <table id="t1">
-        <thead><tr>
-          <th class="left">Producto</th>
-          <th>Inv.Ant.</th><th>Realizada</th><th>Retorno</th>
-          <th>Disponible</th><th>Dev.</th><th>Disp.Real</th>
-          <th>Inv.Final</th><th>Diferencia</th>
-        </tr></thead>
-        <tbody>${hp}</tbody>
-      </table>
-    </div>
+  <div class="tip">
+    💾 Para guardar como PDF → en el diálogo de impresión selecciona <strong>"Guardar como PDF"</strong>
   </div>
 
+  <!-- HOJA 1: PRODUCCIÓN -->
   <div class="sheet">
-    <div class="hdr"><h2>La Vaca Original — Distribución a Ventas</h2><p class="sub">${dt}</p></div>
-    <div class="sec">Ventas por Punto</div>
-    <div class="zoom-wrap" id="w2">
-      <table id="t2">
-        <thead>
-          <tr>
-            <th class="left" rowspan="2">Producto</th><th rowspan="2">Sale</th>
-            <th colspan="2">Autopista</th><th colspan="2">Boquia</th><th colspan="2">Tebaida</th>
-            <th rowspan="2">Valle</th><th rowspan="2">Mayor</th>
-            <th rowspan="2">Total</th><th rowspan="2">Balance</th>
-          </tr>
-          <tr><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th></tr>
-        </thead>
-        <tbody>${hv}</tbody>
-      </table>
+    <div class="hdr">
+      <h2>La Vaca Original — Producción &amp; Stock</h2>
+      <p class="sub">${dt}</p>
     </div>
+    <div class="sec">Inventario de Producción</div>
+    <table id="t1">
+      <colgroup>
+        <col class="c-name">
+        <col class="c-num"><col class="c-num"><col class="c-num">
+        <col class="c-num"><col class="c-num"><col class="c-num">
+        <col class="c-num"><col class="c-num">
+      </colgroup>
+      <thead><tr>
+        <th class="left">Producto</th>
+        <th>Inv.Ant.</th><th>Realizada</th><th>Retorno</th>
+        <th>Disponible</th><th>Dev.</th><th>Disp.Real</th>
+        <th>Inv.Final</th><th>Diferencia</th>
+      </tr></thead>
+      <tbody>${hp}</tbody>
+    </table>
+  </div>
+
+  <!-- HOJA 2: VENTAS -->
+  <div class="sheet">
+    <div class="hdr">
+      <h2>La Vaca Original — Distribución a Ventas</h2>
+      <p class="sub">${dt}</p>
+    </div>
+    <div class="sec">Ventas por Punto</div>
+    <table id="t2">
+      <colgroup>
+        <col class="c-name">
+        <col class="c-sale">
+        <col class="c-turno"><col class="c-turno">
+        <col class="c-turno"><col class="c-turno">
+        <col class="c-turno"><col class="c-turno">
+        <col class="c-sm"><col class="c-sm">
+        <col class="c-sm"><col class="c-bal">
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="left" rowspan="2">Producto</th>
+          <th rowspan="2">Sale</th>
+          <th colspan="2">Autopista</th>
+          <th colspan="2">Boquia</th>
+          <th colspan="2">Tebaida</th>
+          <th rowspan="2">Valle</th><th rowspan="2">Mayor</th>
+          <th rowspan="2">Total</th><th rowspan="2">Balance</th>
+        </tr>
+        <tr>
+          <th>Mañ.</th><th>Tarde</th>
+          <th>Mañ.</th><th>Tarde</th>
+          <th>Mañ.</th><th>Tarde</th>
+        </tr>
+      </thead>
+      <tbody>${hv}</tbody>
+    </table>
   </div>
 
   <scr`+'ipt>'+`
-  function zoomFit(wrapId, tableId) {
-    var wrap  = document.getElementById(wrapId);
-    var table = document.getElementById(tableId);
-    if (!wrap || !table) return;
-
-    // Área imprimible landscape carta con márgenes 8mm x 10mm:
-    // Ancho:  279mm - 20mm = 259mm → a 96dpi = 259 * 3.7795 ≈ 979px
-    // Alto:   216mm - 16mm = 200mm → a 96dpi = 200 * 3.7795 ≈ 756px
-    // Restamos espacio del encabezado (~20mm = 75px) y sec (~8mm = 30px)
-    var availW = 979;
-    var availH = 756 - 105; // 105px para hdr + sec
-
-    var tableW = table.scrollWidth;
-    var tableH = table.scrollHeight;
-
-    var scaleW = tableW > availW ? availW / tableW : 1;
-    var scaleH = tableH > availH ? availH / tableH : 1;
-    var scale  = Math.min(scaleW, scaleH); // el más restrictivo gana
-
-    if (scale < 1) {
-      table.style.zoom           = scale;
-      table.style.transformOrigin = 'top left';
-      // Ajustar el wrapper para que no quede espacio vacío
-      wrap.style.height = Math.ceil(tableH * scale) + 'px';
-      wrap.style.overflow = 'hidden';
-    }
-  }
-
-  window.addEventListener('load', function() {
-    zoomFit('w1','t1');
-    zoomFit('w2','t2');
-    setTimeout(function(){ window.print(); }, 800);
+  // Sin zoom — solo auto-imprimir
+  window.addEventListener('load', function(){
+    setTimeout(function(){ window.print(); }, 500);
   });
   `+'</scr'+'ipt>'+`
   </body></html>`;
