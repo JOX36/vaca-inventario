@@ -106,11 +106,6 @@ tr.dragging{opacity:.4;}
 #fab{position:fixed;bottom:24px;right:20px;width:50px;height:50px;border-radius:50%;background:var(--madera);color:white;font-size:1.5rem;border:none;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:900;transition:background .15s,transform .15s;}
 #fab:hover{background:var(--madera3);transform:scale(1.08);}
 
-/* UNDO BAR */
-#undoBar{position:fixed;bottom:86px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--negro);color:white;padding:10px 18px;border-radius:8px;display:flex;align-items:center;gap:12px;font-size:.8rem;box-shadow:0 4px 20px rgba(0,0,0,.35);transition:transform .3s cubic-bezier(.34,1.56,.64,1);z-index:1100;white-space:nowrap;}
-#undoBar.show{transform:translateX(-50%) translateY(0);}
-#undoBar button{background:var(--madera3);color:white;border:none;border-radius:5px;padding:4px 10px;font-size:.76rem;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;}
-
 /* MODALS */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;align-items:center;justify-content:center;padding:12px;}
 .overlay.open{display:flex;}
@@ -240,12 +235,6 @@ tr.dragging{opacity:.4;}
 <!-- FAB -->
 <button id="fab" onclick="addRow()" title="Agregar producto">＋</button>
 
-<!-- UNDO BAR -->
-<div id="undoBar">
-  <span id="undoMsg">Producto eliminado</span>
-  <button onclick="undoDelete()">↩ Deshacer</button>
-</div>
-
 <!-- MODAL CONSOLIDADO -->
 <div class="overlay" id="overlay">
   <div class="modal">
@@ -366,7 +355,6 @@ const SESSION_MS = 5*60*1000;
 // ══ STATE ══
 let rows=[], hist=[], trash=[];
 let sessionExpiry=0, _histIdx=null, _cajaField=null;
-let _undoTimer=null, _lastDeleted=null;
 let _realtimeChannel=null;
 
 function uid(){ return '_'+Math.random().toString(36).slice(2,9); }
@@ -651,38 +639,16 @@ async function delRow(id){
   if(!requestSession())return;
   const r=rows.find(x=>x.id===id);if(!r)return;
   const idx=rows.indexOf(r);
-  // papelera local
+  if(!confirm(`¿Eliminar "${r.name||'este producto'}"?`))return;
+  // guardar en papelera
   const deleted={...r,_pos:idx,_when:new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}),_date:new Date().toLocaleDateString('es-ES',{day:'numeric',month:'short'})};
   trash.unshift(deleted);
-  _lastDeleted={row:{...r},pos:idx};
   rows=rows.filter(x=>x.id!==id);
   buildTables();
-  showUndo(r.name||'Sin nombre');
-  // Supabase
   try{
     await sbDelete('productos',{id});
     await sbInsert('papelera',{id,data:deleted});
   } catch(e){console.error(e);}
-}
-
-function showUndo(name){
-  if(_undoTimer)clearTimeout(_undoTimer);
-  document.getElementById('undoMsg').textContent=`"${name}" eliminado`;
-  document.getElementById('undoBar').classList.add('show');
-  _undoTimer=setTimeout(()=>{document.getElementById('undoBar').classList.remove('show');_lastDeleted=null;},10000);
-}
-
-async function undoDelete(){
-  if(!_lastDeleted)return;
-  clearTimeout(_undoTimer);
-  document.getElementById('undoBar').classList.remove('show');
-  const pos=Math.min(_lastDeleted.pos,rows.length);
-  rows.splice(pos,0,_lastDeleted.row);
-  trash=trash.filter(x=>x.id!==_lastDeleted.row.id);
-  buildTables();
-  await saveRow(_lastDeleted.row);
-  try{ await sbDelete('papelera',{id:_lastDeleted.row.id}); }catch(e){}
-  _lastDeleted=null;
 }
 
 function openTrash(){
