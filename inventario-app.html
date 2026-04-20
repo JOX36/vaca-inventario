@@ -174,6 +174,7 @@ tr.dragging{opacity:.4;}
   <button class="btn btn-hist"  onclick="openHist()">📋 Historial</button>
   <div class="sep"></div>
   <button class="btn btn-caja"  onclick="openCajaModal()">🖨 Por Caja</button>
+  <button class="btn" style="background:#2a1a3a;color:#c8a8f0;" onclick="openBuscador()">📊 Consultar Producción</button>
   <button class="btn btn-print" onclick="openModal()">📄 Consolidado</button>
   <button class="btn" style="background:#2a0a0a;color:#e88;" onclick="openTrash()">🗑 Papelera</button>
 </div>
@@ -192,9 +193,8 @@ tr.dragging{opacity:.4;}
           <th class="th-base">Inv.<br>Anterior</th>
           <th class="th-base">Realizada</th>
           <th class="th-base" style="background:#1a3a1a!important;min-width:55px">Retorno<br><small style="opacity:.7;font-weight:400">+suma</small></th>
-          <th class="th-disp">Disponible</th>
           <th class="th-dev col-sep" style="min-width:48px">Dev.</th>
-          <th class="th-disp col-sep">Disp.<br>Real</th>
+          <th class="th-disp col-sep">Disponible</th>
           <th class="th-fin col-sep">Inv.<br>Final</th>
           <th class="th-diff">Diferencia</th>
           <th class="th-base" style="width:28px"></th>
@@ -462,7 +462,7 @@ function buildProd(){
   const tb=document.getElementById('prodBody');
   tb.innerHTML='';
   if(!rows.length){
-    tb.innerHTML=`<tr class="empty-row"><td colspan="11" class="left">Sin productos — pulsa <strong>＋ Producto</strong> para comenzar.</td></tr>`;
+    tb.innerHTML=`<tr class="empty-row"><td colspan="10" class="left">Sin productos — pulsa <strong>＋ Producto</strong> para comenzar.</td></tr>`;
     return;
   }
   rows.forEach((r,i)=>{
@@ -501,7 +501,6 @@ function buildProd(){
     tr.appendChild(mkNum(r,'real'));
     const tdRet=mkNum(r,'retorno'); tdRet.firstChild.style.borderColor='#4a8a4a'; tr.appendChild(tdRet);
 
-    const tdD=document.createElement('td'); tdD.className='cell-disp'; tdD.id='disp-'+r.id; tdD.textContent=r.disp||''; tr.appendChild(tdD);
     const tdDev=mkNum(r,'dev'); tdDev.firstChild.style.borderColor='#e09090'; tr.appendChild(tdDev);
     const tdDR=document.createElement('td'); tdDR.className='cell-disp'; tdDR.id='dispreal-'+r.id; tdDR.textContent=r.dispReal||''; tr.appendChild(tdDR);
     tr.appendChild(mkNum(r,'fin'));
@@ -577,7 +576,6 @@ function mkNum(r,field){
 
 function refreshRow(r){
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  set('disp-'+r.id,    r.disp>0?r.disp:'');
   set('dispreal-'+r.id,r.dispReal>0?r.dispReal:'');
   const sEl=document.getElementById('sale-'+r.id); if(sEl)renderSale(sEl,r);
   const dEl=document.getElementById('diff-'+r.id); if(dEl)renderDiff(dEl,r.diff);
@@ -688,6 +686,8 @@ async function cerrarDia(){
   if(!requestSession())return;
   rows.forEach(calcRow);
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
+  const encargado=prompt('¿Quién hace el cierre del día?\n(Nombre del encargado):');
+  if(!encargado||!encargado.trim()){alert('Debes ingresar el nombre del encargado.');return;}
   if(!confirm('¿Cerrar el día de hoy?\n• Se guarda en historial.\n• Inv. Final → Inv. Anterior de mañana.\n• Se limpian campos de producción y ventas.'))return;
   const now=new Date();
   const label=now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -695,7 +695,7 @@ async function cerrarDia(){
   const snap=rows.map(r=>({...r}));
   // guardar historial en Supabase
   try{
-    await sbInsert('historial',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,snapshot:snap});
+    await sbInsert('historial',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,encargado:encargado.trim(),snapshot:snap});
     setSyncStatus('ok','✓ Día cerrado');
   }catch(e){console.error(e);}
   // pasar fin → ant, limpiar
@@ -720,7 +720,7 @@ async function openHist(){
   if(!hist.length){ul.innerHTML='<li style="color:var(--gris4);font-style:italic;padding:10px 0;">No hay días cerrados aún.</li>';}
   else hist.forEach((h,i)=>{
     const li=document.createElement('li'); li.className='hist-item';
-    li.innerHTML=`<div><div class="hi-date">${h.label}</div><div class="hi-meta">Cerrado a las ${h.hora} · ${h.snapshot?.length||0} productos</div></div><span class="hi-arrow">›</span>`;
+    li.innerHTML=`<div><div class="hi-date">${h.label}</div><div class="hi-meta">Cerrado a las ${h.hora} por <b>${h.encargado||'—'}</b> · ${h.snapshot?.length||0} productos</div></div><span class="hi-arrow">›</span>`;
     li.addEventListener('click',()=>openHistDetail(i));
     ul.appendChild(li);
   });
@@ -729,7 +729,7 @@ async function openHist(){
 function openHistDetail(idx){
   _histIdx=idx; const h=hist[idx];
   document.getElementById('hdTitle').textContent=h.label;
-  document.getElementById('hdSub').textContent=`Cerrado a las ${h.hora}`;
+  document.getElementById('hdSub').textContent=`Cerrado a las ${h.hora} por ${h.encargado||'—'}`;
   document.getElementById('hdBody').innerHTML=buildHistHTML(h);
   closeModal('histOverlay');
   document.getElementById('histDetail').classList.add('open');
@@ -739,13 +739,13 @@ function buildHistHTML(h){
   let hp=`<p class="modal-section">Producción &amp; Stock</p>
   <table class="pt"><thead><tr>
     <th class="left">Producto</th><th>Anterior</th><th>Realizada</th><th>Retorno</th>
-    <th>Disponible</th><th>Dev.</th><th>Disp.Real</th><th>Final</th><th>Diferencia</th>
+    <th>Dev.</th><th>Disponible</th><th>Final</th><th>Diferencia</th>
   </tr></thead><tbody>`;
   snap.forEach(r=>{
     const dt=r.diff===null?'—':r.diff===0?'✔':r.diff<0?Math.abs(r.diff)+' faltan':'+'+r.diff+' sobran';
     const dc=r.diff===null||r.diff===0?'#888':r.diff<0?'var(--rojo)':'var(--verde)';
     hp+=`<tr><td class="left">${escH(r.name)}</td><td>${r.ant??'—'}</td><td>${r.real??'—'}</td><td>${r.retorno??'—'}</td>
-      <td><b>${r.disp||0}</b></td><td>${r.dev??'—'}</td><td><b>${r.dispReal??0}</b></td>
+      <td>${r.dev??'—'}</td><td><b>${r.dispReal??0}</b></td>
       <td>${r.fin??'—'}</td><td style="font-weight:700;color:${dc}">${dt}</td></tr>`;
   });
   hp+=`</tbody></table>`;
@@ -775,7 +775,43 @@ function printHist(){
   const w=window.open('','_blank','width=1050,height=720');
   w.document.write(`<!DOCTYPE html><html><head><title>Historial</title><style>${printCSS()}</style></head><body>
     <h2>La Vaca Original — ${escH(h.label)}</h2><p class="sub">Cerrado a las ${h.hora}</p>
-    ${document.getElementById('hdBody').innerHTML}</body></html>`);
+    ${document.getElementById('hdBody').innerHTML}
+<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
+<div class="overlay" id="buscadorOverlay">
+  <div class="modal modal-md">
+    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
+    <div class="modal-title">📊 Consultar Producción</div>
+    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
+        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
+          oninput="filtrarSugerencias(this.value)">
+        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
+          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
+          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
+      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
+    </div>
+
+    <div id="buscResultado"></div>
+  </div>
+</div>
+
+</body></html>`);
   w.document.close(); setTimeout(()=>w.print(),400);
 }
 
@@ -835,7 +871,7 @@ function imprimirCaja(){
     tfoot td { font-weight: 700; background: #f0ebe3; border-top: 2px solid #111; font-size: 9pt; }
     .footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #ccc;
               display: flex; justify-content: space-between; font-size: 7pt; color: #888; }
-    .firma { margin-top: 28px; display: flex; justify-content: flex-end; }
+    .firmas { margin-top: 24px; display: flex; justify-content: space-between; padding: 0 10px; }
     .firma-box { text-align: center; width: 180px; }
     .firma-line { border-top: 1px solid #333; padding-top: 4px; font-size: 7.5pt; color: #555; }
   </style></head><body>
@@ -853,11 +889,50 @@ function imprimirCaja(){
     <tfoot><tr><td colspan="2" style="text-align:right;padding-right:12px">TOTAL UNIDADES</td><td>${total}</td></tr></tfoot>
   </table>
   <div class="footer"><span>La Vaca Original — Inventario</span><span>${caja.nombre} · ${caja.turno}</span></div>
-  ${cajero?`<div class="firma"><div class="firma-box"><div class="firma-line">Firma: ${escH(cajero)}</div></div></div>`:''}
+  <div class="firmas">
+    <div class="firma-box"><div class="firma-line">Firma Encargado Producción</div></div>
+    ${cajero?`<div class="firma-box"><div class="firma-line">Firma: ${escH(cajero)}</div></div>`:'<div class="firma-box"><div class="firma-line">Firma Cajero/Responsable</div></div>'}
+  </div>
   <scr`+'ipt>'+`
   // botones agregados dinámicamente
   `+'</scr'+'ipt>'+`
-  </body></html>`);
+  
+<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
+<div class="overlay" id="buscadorOverlay">
+  <div class="modal modal-md">
+    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
+    <div class="modal-title">📊 Consultar Producción</div>
+    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
+        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
+          oninput="filtrarSugerencias(this.value)">
+        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
+          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
+          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
+      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
+    </div>
+
+    <div id="buscResultado"></div>
+  </div>
+</div>
+
+</body></html>`);
   w.document.close();
   // Agregar botones de acción en la ventana
   setTimeout(()=>{
@@ -887,14 +962,14 @@ function buildConsolidadoHTML(){
   let hp=`<p class="modal-section">Producción &amp; Stock</p>
   <table class="pt"><thead><tr>
     <th class="left">Producto</th><th>Anterior</th><th>Realizada</th><th>Retorno</th>
-    <th>Disponible</th><th>Dev.</th><th>Disp.Real</th><th>Final</th><th>Diferencia</th>
+    <th>Dev.</th><th>Disponible</th><th>Final</th><th>Diferencia</th>
   </tr></thead><tbody>`;
   rows.filter(r=>r.disp>0||r.dispReal>0).forEach(r=>{
     const dt=r.diff===null?'—':r.diff===0?'✔ Cuadra':r.diff<0?Math.abs(r.diff)+' faltan':'+'+r.diff+' sobran';
     const dc=r.diff===null||r.diff===0?'#888':r.diff<0?'var(--rojo)':'var(--verde)';
     hp+=`<tr><td class="left">${escH(r.name)||'Sin nombre'}</td>
       <td>${r.ant??'—'}</td><td>${r.real??'—'}</td><td>${r.retorno??'—'}</td>
-      <td><b>${r.disp||0}</b></td><td>${r.dev??'—'}</td><td><b>${r.dispReal??0}</b></td>
+      <td>${r.dev??'—'}</td><td><b>${r.dispReal??0}</b></td>
       <td>${r.fin??'—'}</td><td style="font-weight:700;color:${dc}">${dt}</td></tr>`;
   });
   hp+=`</tbody></table>`;
@@ -1002,13 +1077,13 @@ function buildPrintDoc(dt, hp, hv){
       <colgroup>
         <col class="c-name">
         <col class="c-num"><col class="c-num"><col class="c-num">
-        <col class="c-num"><col class="c-num"><col class="c-num">
+        <col class="c-num"><col class="c-num">
         <col class="c-num"><col class="c-num">
       </colgroup>
       <thead><tr>
         <th class="left">Producto</th>
         <th>Inv.Ant.</th><th>Realizada</th><th>Retorno</th>
-        <th>Disponible</th><th>Dev.</th><th>Disp.Real</th>
+        <th>Dev.</th><th>Disponible</th>
         <th>Inv.Final</th><th>Diferencia</th>
       </tr></thead>
       <tbody>${hp}</tbody>
@@ -1058,7 +1133,43 @@ function buildPrintDoc(dt, hp, hv){
     setTimeout(function(){ window.print(); }, 500);
   });
   `+'</scr'+'ipt>'+`
-  </body></html>`;
+  
+<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
+<div class="overlay" id="buscadorOverlay">
+  <div class="modal modal-md">
+    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
+    <div class="modal-title">📊 Consultar Producción</div>
+    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
+        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
+          oninput="filtrarSugerencias(this.value)">
+        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
+          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
+          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
+      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
+    </div>
+
+    <div id="buscResultado"></div>
+  </div>
+</div>
+
+</body></html>`;
 }
 
 function getConsolidadoData(){
@@ -1073,7 +1184,7 @@ function getConsolidadoData(){
     const dc=r.diff===null||r.diff===0?'#555':r.diff<0?'#b02020':'#2d6a2d';
     hp+=`<tr><td class="left">${escH(r.name)||'—'}</td>
       <td>${r.ant??'—'}</td><td>${r.real??'—'}</td><td>${r.retorno??'—'}</td>
-      <td><b>${r.disp||0}</b></td><td>${r.dev??'—'}</td><td><b>${r.dispReal??0}</b></td>
+      <td>${r.dev??'—'}</td><td><b>${r.dispReal??0}</b></td>
       <td>${r.fin??'—'}</td><td style="font-weight:700;color:${dc}">${dif}</td></tr>`;
   });
   let hv='';
@@ -1129,6 +1240,146 @@ function printCSS(){return `
 
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
+
+// ══ BUSCADOR DE PRODUCCIÓN ══
+function openBuscador(){
+  // Poner fechas por defecto: primer día del mes actual → hoy
+  const hoy = new Date();
+  const primerDia = new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0,10);
+  const hoyStr = hoy.toISOString().slice(0,10);
+  document.getElementById('buscDesde').value = primerDia;
+  document.getElementById('buscHasta').value = hoyStr;
+  document.getElementById('buscProd').value = '';
+  document.getElementById('buscResultado').innerHTML = '';
+  document.getElementById('sugerencias').style.display = 'none';
+  document.getElementById('buscadorOverlay').classList.add('open');
+}
+
+function filtrarSugerencias(val){
+  const box = document.getElementById('sugerencias');
+  if(!val.trim()){ box.style.display='none'; return; }
+  const matches = rows.filter(r => r.name && r.name.toLowerCase().includes(val.toLowerCase()));
+  if(!matches.length){ box.style.display='none'; return; }
+  box.innerHTML = matches.map(r =>
+    `<div onclick="elegirProducto('${escH(r.name)}')"
+      style="padding:8px 12px;cursor:pointer;font-size:.83rem;border-bottom:1px solid var(--gris2);"
+      onmouseover="this.style.background='var(--gris1)'"
+      onmouseout="this.style.background='white'">${escH(r.name)}</div>`
+  ).join('');
+  box.style.display = 'block';
+}
+
+function elegirProducto(name){
+  document.getElementById('buscProd').value = name;
+  document.getElementById('sugerencias').style.display = 'none';
+}
+
+async function buscarProduccion(){
+  const nombre = document.getElementById('buscProd').value.trim();
+  const desde  = document.getElementById('buscDesde').value;
+  const hasta  = document.getElementById('buscHasta').value;
+  const res    = document.getElementById('buscResultado');
+
+  if(!nombre){ res.innerHTML='<p style="color:var(--rojo);font-size:.82rem;">Escribe el nombre de un producto.</p>'; return; }
+  if(!desde||!hasta){ res.innerHTML='<p style="color:var(--rojo);font-size:.82rem;">Selecciona un rango de fechas.</p>'; return; }
+  if(desde>hasta){ res.innerHTML='<p style="color:var(--rojo);font-size:.82rem;">La fecha inicio debe ser anterior a la fecha fin.</p>'; return; }
+
+  res.innerHTML='<p style="color:var(--gris4);font-size:.82rem;">Buscando...</p>';
+
+  try{
+    // Traer historial del rango de fechas
+    const data = await sbGet('historial',
+      `fecha=gte.${desde}&fecha=lte.${hasta}&order=fecha.asc`
+    );
+
+    if(!data.length){
+      res.innerHTML='<p style="color:var(--gris4);font-size:.82rem;font-style:italic;">No hay días cerrados en ese rango de fechas.</p>';
+      return;
+    }
+
+    // Buscar el producto en cada snapshot
+    const nombreLower = nombre.toLowerCase();
+    let filas = [];
+    let totalRealizada = 0;
+    let totalRetorno   = 0;
+
+    data.forEach(dia => {
+      const snap = dia.snapshot || [];
+      const prod = snap.find(p => p.name && p.name.toLowerCase().includes(nombreLower));
+      if(prod){
+        filas.push({
+          fecha: dia.label,
+          encargado: dia.encargado||'—',
+          ant:      prod.ant||0,
+          real:     prod.real||0,
+          retorno:  prod.retorno||0,
+          disp:     prod.dispReal||0,
+          fin:      prod.fin||'—',
+        });
+        totalRealizada += prod.real||0;
+        totalRetorno   += prod.retorno||0;
+      }
+    });
+
+    if(!filas.length){
+      res.innerHTML=`<p style="color:var(--gris4);font-size:.82rem;font-style:italic;">No se encontró "<b>${escH(nombre)}</b>" en los días cerrados de ese período.</p>`;
+      return;
+    }
+
+    // Construir tabla resultado
+    let html = `
+      <div style="background:var(--madera-suave);border:1px solid var(--border);border-left:4px solid var(--madera);
+                  border-radius:6px;padding:10px 14px;margin-bottom:14px;display:flex;gap:24px;flex-wrap:wrap;">
+        <div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Producto</div>
+             <div style="font-weight:700;font-size:.92rem;">${escH(nombre)}</div></div>
+        <div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Período</div>
+             <div style="font-weight:600;font-size:.82rem;">${desde} → ${hasta}</div></div>
+        <div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Días encontrados</div>
+             <div style="font-weight:700;font-size:.92rem;color:var(--madera);">${filas.length}</div></div>
+        <div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Total Realizada</div>
+             <div style="font-weight:700;font-size:1.1rem;color:var(--accent2);">${totalRealizada}</div></div>
+        <div><div style="font-size:.68rem;text-transform:uppercase;color:var(--muted);">Total Retorno</div>
+             <div style="font-weight:700;font-size:1.1rem;color:#1d4e89;">${totalRetorno}</div></div>
+      </div>
+      <div style="overflow-x:auto;">
+      <table class="pt">
+        <thead><tr>
+          <th class="left">Fecha</th>
+          <th class="left">Encargado</th>
+          <th>Inv.Anterior</th><th>Realizada</th><th>Retorno</th>
+          <th>Disponible</th><th>Inv.Final</th>
+        </tr></thead>
+        <tbody>
+    `;
+    filas.forEach(f => {
+      html += `<tr>
+        <td class="left" style="font-size:.75rem;">${f.fecha}</td>
+        <td class="left">${escH(f.encargado)}</td>
+        <td>${f.ant}</td>
+        <td style="font-weight:700;color:var(--accent2);">${f.real}</td>
+        <td style="color:#1d4e89;">${f.retorno}</td>
+        <td>${f.disp}</td>
+        <td>${f.fin}</td>
+      </tr>`;
+    });
+    html += `</tbody>
+      <tfoot><tr>
+        <td class="left" colspan="2"><b>TOTALES</b></td>
+        <td>—</td>
+        <td style="font-weight:700;color:var(--accent2);">${totalRealizada}</td>
+        <td style="font-weight:700;color:#1d4e89;">${totalRetorno}</td>
+        <td>—</td><td>—</td>
+      </tr></tfoot>
+      </table></div>`;
+
+    res.innerHTML = html;
+
+  } catch(e){
+    res.innerHTML='<p style="color:var(--rojo);font-size:.82rem;">Error al buscar. Verifica la conexión.</p>';
+    console.error(e);
+  }
+}
+
 // ══ INIT ══
 document.getElementById('hDate').textContent=new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
 loadAll();
@@ -1137,5 +1388,41 @@ if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
 </script>
+
+<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
+<div class="overlay" id="buscadorOverlay">
+  <div class="modal modal-md">
+    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
+    <div class="modal-title">📊 Consultar Producción</div>
+    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
+
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
+        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
+          oninput="filtrarSugerencias(this.value)">
+        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
+          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
+          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
+      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
+    </div>
+
+    <div id="buscResultado"></div>
+  </div>
+</div>
+
 </body>
 </html>
