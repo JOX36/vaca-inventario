@@ -379,13 +379,15 @@ async function sbInsert(table, data){
 }
 
 // ══ CONFIG APP ══
-const PASS       = '123456';
+const PASS_ADMIN    = '150884'; // ← cambia esta clave de administrador
+const PASS_INVITADO = '123456'; // ← clave para invitados (trabajadores)
 const MAX_HIST   = 15;
 const SESSION_MS = 5*60*1000;
 
 // ══ STATE ══
 let rows=[], hist=[], trash=[];
-let sessionExpiry=0, _histIdx=null, _cajaField=null;
+let sessionExpiry=0, sessionLevel='', _histIdx=null, _cajaField=null;
+// sessionLevel: '' = sin sesión, 'invitado' = trabajador, 'admin' = administrador
 let _realtimeChannel=null;
 
 function uid(){ return '_'+Math.random().toString(36).slice(2,9); }
@@ -511,25 +513,41 @@ function buildProd(){
     const tdN=document.createElement('td'); tdN.className='left';
     const sp=document.createElement('span'); sp.style.cssText='color:var(--gris4);font-size:.7rem;margin-right:5px;'; sp.textContent=i+1;
     const inN=document.createElement('input'); inN.type='text'; inN.value=r.name||''; inN.placeholder='Nombre...';
-    if(!isSessionActive()){
+    if(!isAdmin()){
       inN.readOnly=true;
       inN.style.cssText='background:#f5f5f5;color:#666;cursor:not-allowed;border-color:#ddd;';
-      inN.title='Requiere sesión admin';
+      inN.title='Solo el administrador puede editar el nombre';
     }
     inN.addEventListener('input',function(){
-      if(!isSessionActive()){this.value=r.name||'';return;}
+      if(!isAdmin()){this.value=r.name||'';return;}
       r.name=this.value;
       const el=document.getElementById('vname-'+r.id);if(el)el.textContent=this.value||'—';
       debSave(r);
     });
     inN.addEventListener('click',function(){
-      if(this.readOnly&&!isSessionActive()){
-        if(requestSession()){buildProd();}
+      if(this.readOnly&&!isAdmin()){
+        if(requestAdmin()){buildProd();}
       }
     });
     tdN.appendChild(sp); tdN.appendChild(inN); tr.appendChild(tdN);
 
-    tr.appendChild(mkNum(r,'ant'));
+    // Inv.Anterior: solo admin puede editar
+    var tdAnt=document.createElement('td');
+    if(isAdmin()){
+      var inpAnt=document.createElement('input');inpAnt.type='number';inpAnt.min='0';inpAnt.placeholder='';
+      inpAnt.value=(r.ant!==null&&r.ant!==undefined)?r.ant:'';
+      inpAnt.style.borderColor='#e09090';
+      inpAnt.addEventListener('input',function(){
+        r.ant=this.value===''?null:parseFloat(this.value);
+        calcRow(r);refreshRow(r);debSave(r);
+      });
+      tdAnt.appendChild(inpAnt);
+    }else{
+      tdAnt.className='cell-locked';
+      tdAnt.textContent=r.ant||'—';
+      tdAnt.title='Solo el administrador puede modificar el inventario anterior';
+    }
+    tr.appendChild(tdAnt);
     tr.appendChild(mkNum(r,'real'));
     const tdRet=mkNum(r,'retorno'); tdRet.firstChild.style.borderColor='#4a8a4a'; tr.appendChild(tdRet);
 
@@ -634,28 +652,64 @@ function renderBalance(el,bal){
 }
 
 // ══ SESIÓN ══
-function isSessionActive(){return Date.now()<sessionExpiry;}
+function isSessionActive(){ return Date.now()<sessionExpiry && sessionLevel!==''; }
+function isAdmin(){         return Date.now()<sessionExpiry && sessionLevel==='admin'; }
+function isInvitado(){      return Date.now()<sessionExpiry && (sessionLevel==='invitado'||sessionLevel==='admin'); }
+
+// Pedir sesión de cualquier nivel (invitado o admin)
 function requestSession(){
-  if(isSessionActive())return true;
-  const v=prompt('🔒 Password de administrador (6 dígitos):');
-  if(v===null)return false;
-  if(v!==PASS){alert('❌ Password incorrecto.');return false;}
-  sessionExpiry=Date.now()+SESSION_MS;
-  updateBadge(); buildProd();
-  setTimeout(()=>{updateBadge();buildProd();},SESSION_MS+100);
-  return true;
+  if(isSessionActive()) return true;
+  const v=prompt('🔒 Ingresa tu clave de acceso:');
+  if(v===null) return false;
+  if(v===PASS_ADMIN){
+    sessionExpiry=Date.now()+SESSION_MS;
+    sessionLevel='admin';
+    updateBadge(); buildProd();
+    setTimeout(()=>{updateBadge();buildProd();},SESSION_MS+100);
+    return true;
+  }
+  if(v===PASS_INVITADO){
+    sessionExpiry=Date.now()+SESSION_MS;
+    sessionLevel='invitado';
+    updateBadge(); buildProd();
+    setTimeout(()=>{updateBadge();buildProd();},SESSION_MS+100);
+    return true;
+  }
+  alert('❌ Clave incorrecta.');
+  return false;
+}
+
+// Pedir sesión solo de admin
+function requestAdmin(){
+  if(isAdmin()) return true;
+  const v=prompt('🔒 Clave de administrador:');
+  if(v===null) return false;
+  if(v===PASS_ADMIN){
+    sessionExpiry=Date.now()+SESSION_MS;
+    sessionLevel='admin';
+    updateBadge(); buildProd();
+    setTimeout(()=>{updateBadge();buildProd();},SESSION_MS+100);
+    return true;
+  }
+  alert('❌ Clave de administrador incorrecta.');
+  return false;
 }
 function updateBadge(){
   const b=document.getElementById('sessionBadge');if(!b)return;
-  if(isSessionActive()){
+  if(isAdmin()){
     const min=Math.ceil((sessionExpiry-Date.now())/60000);
-    b.textContent=`🔓 Admin (${min}min)`;b.style.display='inline-flex';
+    b.textContent='🔓 Admin ('+min+'min)';b.style.display='inline-flex';
+    b.style.color='#4caf50';
+  }else if(isInvitado()){
+    const min=Math.ceil((sessionExpiry-Date.now())/60000);
+    b.textContent='👤 Invitado ('+min+'min)';b.style.display='inline-flex';
+    b.style.color='#ffa726';
   }else{b.style.display='none';}
 }
 
 // ══ CRUD ══
 async function addRow(){
-  if(!requestSession())return;
+  if(!requestAdmin())return;
   const r={id:uid(),name:'',ant:null,real:null,retorno:null,dev:null,fin:null,
     v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,valle:null,mayor:null,orden:rows.length};
   rows.push(r);
@@ -665,7 +719,7 @@ async function addRow(){
 }
 
 async function delRow(id){
-  if(!requestSession())return;
+  if(!requestAdmin())return;
   const r=rows.find(x=>x.id===id);if(!r)return;
   const idx=rows.indexOf(r);
   if(!confirm(`¿Eliminar "${r.name||'este producto'}"?`))return;
@@ -682,17 +736,26 @@ async function delRow(id){
 
 function openTrash(){
   const el=document.getElementById('trashList'); el.innerHTML='';
-  if(!trash.length){el.innerHTML='<p style="color:var(--gris4);font-style:italic;padding:10px 0;font-size:.82rem;">La papelera está vacía.</p>';}
-  else trash.forEach((r,i)=>{
-    const div=document.createElement('div'); div.className='trash-item';
-    div.innerHTML=`<div><div class="ti-name">${escH(r.name)||'Sin nombre'}</div><div class="ti-meta">Eliminado el ${r._date} · posición #${r._pos+1}</div></div>
-      <button class="trash-restore" onclick="restoreFromTrash(${i})">↩ Restaurar</button>`;
-    el.appendChild(div);
-  });
+  if(!trash.length){
+    el.innerHTML='<p style="color:var(--gris4);font-style:italic;padding:10px 0;font-size:.82rem;">La papelera está vacía.</p>';
+  } else {
+    trash.forEach((r,i)=>{
+      const div=document.createElement('div'); div.className='trash-item';
+      // Botón restaurar solo visible si es admin
+      const btnHtml=isAdmin()
+        ? '<button class="trash-restore" onclick="restoreFromTrash('+i+')">↩ Restaurar</button>'
+        : '<span style="font-size:.7rem;color:var(--gris4);font-style:italic;">Solo admin</span>';
+      div.innerHTML='<div><div class="ti-name">'+(escH(r.name)||'Sin nombre')+'</div>'
+        +'<div class="ti-meta">Eliminado el '+r._date+' · posición #'+(r._pos+1)+'</div></div>'
+        +btnHtml;
+      el.appendChild(div);
+    });
+  }
   document.getElementById('trashOverlay').classList.add('open');
 }
 
 async function restoreFromTrash(i){
+  if(!requestAdmin()) return;
   const r={...trash[i]};
   const pos=Math.min(r._pos,rows.length);
   delete r._pos;delete r._when;delete r._date;delete r._id;
@@ -706,6 +769,7 @@ async function restoreFromTrash(i){
 }
 
 async function emptyTrash(){
+  if(!requestAdmin()) return;
   if(!trash.length)return;
   if(!confirm(`¿Vaciar la papelera? Se eliminarán ${trash.length} producto(s) permanentemente.`))return;
   trash=[];
