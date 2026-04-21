@@ -781,8 +781,8 @@ function buildProd(){
     // Inv.Anterior: solo admin puede editar
     var tdAnt=document.createElement('td');
     if(isAdmin()){
-      var inpAnt=document.createElement('input');inpAnt.type='tel';
-      inpAnt.inputMode='numeric';inpAnt.pattern='[0-9]*';
+      var inpAnt=document.createElement('input');inpAnt.type='number';
+      inpAnt.inputMode='decimal';inpAnt.step='0.5';inpAnt.min='0';
       inpAnt.placeholder='—';inpAnt.style.textAlign='center';
       inpAnt.value=(r.ant!==null&&r.ant!==undefined)?r.ant:'';
       inpAnt.style.borderColor='#e09090';
@@ -868,18 +868,16 @@ function debSave(r){
 function mkNum(r,field){
   const td=document.createElement('td');
   const inp=document.createElement('input');
-  inp.type='tel'; // tel muestra teclado numérico en móvil sin las flechas
-  inp.inputMode='numeric';
-  inp.pattern='[0-9]*';
+  inp.type='number';
+  inp.inputMode='decimal';
+  inp.step='0.5';
+  inp.min='0';
   inp.placeholder='—';
   inp.style.textAlign='center';
-  // Mostrar valor o vacío (placeholder '—' se ve cuando está vacío)
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
-  // Al tocar: seleccionar todo el contenido para reemplazar de una vez
   inp.addEventListener('focus',function(){ this.select(); });
   inp.addEventListener('input',function(){
-    const val=this.value.replace(/[^0-9]/g,''); // solo números
-    this.value=val;
+    const val=this.value;
     r[field]=val===''?null:parseFloat(val);
     calcRow(r); refreshRow(r); debSave(r);
   });
@@ -1263,43 +1261,8 @@ function imprimirCaja(){
 }
 
 // ── MODAL BUSCADOR DE PRODUCCIÓN ──
-<div class="overlay" id="buscadorOverlay">
-  <div class="modal modal-md">
-    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
-    <div class="modal-title">📊 Consultar Producción</div>
-    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
-
-    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
-      <div>
-        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
-        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
-          oninput="filtrarSugerencias(this.value)">
-        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div>
-          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
-          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
-        </div>
-        <div>
-          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
-          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
-      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
-    </div>
-
-    <div id="buscResultado"></div>
-  </div>
-</div>
-
-</body></html>`);
+</body></html>\`);
   w.document.close();
-  // Agregar botones de acción en la ventana
   setTimeout(()=>{
     try{
       const div=w.document.createElement('div');
@@ -1312,7 +1275,6 @@ function imprimirCaja(){
   closeModal('cajaOverlay');
 }
 
-// ══ CONSOLIDADO ══
 function openModal(){
   rows.forEach(calcRow);
   const now=new Date();
