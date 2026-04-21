@@ -127,7 +127,7 @@ header h1 span{color:var(--madera3);}
   overflow-x:auto;
   border:1px solid var(--gris2);
 }
-table{border-collapse:collapse;width:100%;table-layout:fixed;}
+table{border-collapse:collapse;width:100%;}
 
 /* Encabezados */
 thead tr.head-main{background:var(--negro);color:#fff;}
@@ -162,12 +162,12 @@ td.left{text-align:left;}
 
 /* Inputs dentro de tabla */
 td input{
-  font-family:'Inter',sans-serif;font-size:.78rem;
-  width:100%;padding:3px 4px;
+  font-family:'Inter',sans-serif;font-size:.8rem;
+  width:100%;padding:4px 5px;
   border:1.5px solid var(--gris2);border-radius:4px;
   background:var(--gris1);color:var(--texto);text-align:center;
   transition:border-color .15s,background .15s,box-shadow .15s;
-  min-width:34px;max-width:72px;
+  min-width:44px;max-width:80px;
 }
 td input[type="text"]{text-align:left;min-width:130px;}
 td input:focus{
@@ -612,7 +612,19 @@ async function loadAll(){
       sbGet('historial','order=created_at.desc&limit='+MAX_HIST),
       sbGet('papelera','order=deleted_at.desc&limit=30')
     ]);
-    rows  = prods.map(p=>({...p}));
+    rows  = prods.map(p=>({
+      ...p,
+      // Tratar 0 como null para que los campos vacíos muestren — en vez de 0
+      real:    (p.real===0||p.real===null)    ? null : p.real,
+      retorno: (p.retorno===0||p.retorno===null) ? null : p.retorno,
+      dev:     (p.dev===0||p.dev===null)      ? null : p.dev,
+      fin:     (p.fin===0||p.fin===null)      ? null : p.fin,
+      v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
+      v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
+      v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
+      valle:(p.valle===0||p.valle===null)?null:p.valle,
+      mayor:(p.mayor===0||p.mayor===null)?null:p.mayor,
+    }));
     hist  = hists.map(h=>({...h, snapshot:h.snapshot}));
     trash = trashItems.map(t=>({...t.data, _id:t.id, _when:t.deleted_at?.slice(11,16)||'', _date:t.deleted_at?.slice(0,10)||''}));
     buildTables();
@@ -1331,7 +1343,7 @@ function buildPrintDoc(dt, hp, hv){
     + '.sec{font-size:5.5pt;font-weight:700;text-transform:uppercase;color:#444;'
     + 'padding-bottom:1mm;border-bottom:1.5px solid #111;margin-bottom:1.5mm;}'
     // tabla ocupa 100% del ancho — table-layout:fixed distribuye columnas igual
-    + 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
+    + 'table{border-collapse:collapse;width:100%;}'
     + 'th{background:#111;color:white;padding:2.5pt 2pt;font-size:5pt;'
     + 'text-transform:uppercase;text-align:center;border:1px solid #333;word-break:break-word;}'
     + 'th.left{text-align:left;}'
