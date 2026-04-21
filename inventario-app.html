@@ -315,6 +315,38 @@ tr.dragging{opacity:.4;}
   </div>
 </div>
 
+<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
+<div class="overlay" id="buscadorOverlay">
+  <div class="modal modal-md">
+    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
+    <div class="modal-title">📊 Consultar Producción</div>
+    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+      <div>
+        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
+        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
+          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
+          oninput="filtrarSugerencias(this.value)">
+        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
+          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+        <div>
+          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
+          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
+      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
+    </div>
+    <div id="buscResultado"></div>
+  </div>
+</div>
+
 <script>
 // ══ SUPABASE CONFIG ══
 const SB_URL  = 'https://qpacajnwrpyqhjjxyryg.supabase.co';
@@ -697,7 +729,11 @@ async function cerrarDia(){
   try{
     await sbInsert('historial',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,encargado:encargado.trim(),snapshot:snap});
     setSyncStatus('ok','✓ Día cerrado');
-  }catch(e){console.error(e);}
+  }catch(e){
+    console.error(e);
+    alert('❌ Error al guardar el historial: '+e.message+'\nEl día NO fue cerrado. Verifica la conexión e intenta de nuevo.');
+    return; // NO continuar si falló el guardado
+  }
   // pasar fin → ant, limpiar
   rows.forEach(r=>{
     r.ant=r.fin!==null?r.fin:(r.ant||0);
@@ -896,8 +932,10 @@ function imprimirCaja(){
   <scr`+'ipt>'+`
   // botones agregados dinámicamente
   `+'</scr'+'ipt>'+`
-  
-<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
+  </body></html>\`;
+}
+
+// ── MODAL BUSCADOR DE PRODUCCIÓN ──
 <div class="overlay" id="buscadorOverlay">
   <div class="modal modal-md">
     <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
@@ -1133,43 +1171,11 @@ function buildPrintDoc(dt, hp, hv){
     setTimeout(function(){ window.print(); }, 500);
   });
   `+'</scr'+'ipt>'+`
-  
-<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
-<div class="overlay" id="buscadorOverlay">
-  <div class="modal modal-md">
-    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
-    <div class="modal-title">📊 Consultar Producción</div>
-    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
+  </body></html>\`;
+}
 
-    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
-      <div>
-        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
-        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
-          oninput="filtrarSugerencias(this.value)">
-        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div>
-          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
-          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
-        </div>
-        <div>
-          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
-          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
-      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
-    </div>
-
-    <div id="buscResultado"></div>
-  </div>
-</div>
-
-</body></html>`;
+  `+'</scr'+'ipt>'+`
+  </body></html>`;
 }
 
 function getConsolidadoData(){
