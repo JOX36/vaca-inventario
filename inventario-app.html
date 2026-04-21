@@ -808,47 +808,38 @@ function buildHistHTML(h){
 function printHist(){
   if(_histIdx===null)return;
   const h=hist[_histIdx];
-  const w=window.open('','_blank','width=1050,height=720');
-  w.document.write(`<!DOCTYPE html><html><head><title>Historial</title><style>${printCSS()}</style></head><body>
-    <h2>La Vaca Original — ${escH(h.label)}</h2><p class="sub">Cerrado a las ${h.hora}</p>
-    ${document.getElementById('hdBody').innerHTML}
-<!-- MODAL BUSCADOR DE PRODUCCIÓN -->
-<div class="overlay" id="buscadorOverlay">
-  <div class="modal modal-md">
-    <button class="modal-x" onclick="closeModal('buscadorOverlay')">✕</button>
-    <div class="modal-title">📊 Consultar Producción</div>
-    <div class="modal-sub">Busca un producto y ve su producción en un rango de fechas</div>
-
-    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
-      <div>
-        <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Producto a buscar</label>
-        <input type="text" id="buscProd" placeholder="Escribe el nombre del producto..."
-          style="width:100%;padding:8px 12px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.85rem;background:var(--gris1);"
-          oninput="filtrarSugerencias(this.value)">
-        <div id="sugerencias" style="border:1px solid var(--gris2);border-top:none;border-radius:0 0 6px 6px;background:white;max-height:150px;overflow-y:auto;display:none;"></div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div>
-          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha inicio</label>
-          <input type="date" id="buscDesde" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
-        </div>
-        <div>
-          <label style="font-size:.76rem;font-weight:600;display:block;margin-bottom:4px;">Fecha fin</label>
-          <input type="date" id="buscHasta" style="width:100%;padding:7px 10px;border:1.5px solid var(--gris2);border-radius:6px;font-family:'Inter',sans-serif;font-size:.83rem;background:var(--gris1);">
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-actions" style="justify-content:flex-start;margin-bottom:16px;">
-      <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
-    </div>
-
-    <div id="buscResultado"></div>
-  </div>
-</div>
-
-</body></html>`);
-  w.document.close(); setTimeout(()=>w.print(),400);
+  // Construir hp y hv desde el snapshot
+  const snap=h.snapshot||[];
+  let hp='';
+  snap.forEach(r=>{
+    const dif=r.diff===null?'&mdash;':r.diff===0?'&#10004;':r.diff<0?Math.abs(r.diff)+' faltan':'+'+r.diff+' sobran';
+    const dc=r.diff===null||r.diff===0?'#555':r.diff<0?'#b02020':'#2d6a2d';
+    hp+='<tr><td class="left">'+escH(r.name)+'</td>'
+      +'<td>'+(r.ant??'&mdash;')+'</td><td>'+(r.real??'&mdash;')+'</td><td>'+(r.retorno??'&mdash;')+'</td>'
+      +'<td>'+(r.dev??'&mdash;')+'</td><td><b>'+(r.dispReal??0)+'</b></td>'
+      +'<td>'+(r.fin??'&mdash;')+'</td>'
+      +'<td style="font-weight:700;color:'+dc+'">'+dif+'</td></tr>';
+  });
+  let hv='';
+  snap.filter(r=>r.saleVentas>0||r.totalVentas>0).forEach(r=>{
+    const sale=r.saleVentas>0?r.saleVentas:'&mdash;';
+    const bt=r.balance===null?'&mdash;':r.balance===0?'&#10004; OK':r.balance<0?Math.abs(r.balance)+' pend.':'+'+r.balance+' extra';
+    const bc=r.balance===null||r.balance===0?'#2d6a2d':r.balance<0?'#b02020':'#7a4a00';
+    hv+='<tr><td class="left">'+escH(r.name)+'</td>'
+      +'<td style="font-weight:700;color:#b02020">'+sale+'</td>'
+      +'<td>'+(r.v1m??'&mdash;')+'</td><td>'+(r.v1t??'&mdash;')+'</td>'
+      +'<td>'+(r.v2m??'&mdash;')+'</td><td>'+(r.v2t??'&mdash;')+'</td>'
+      +'<td>'+(r.v3m??'&mdash;')+'</td><td>'+(r.v3t??'&mdash;')+'</td>'
+      +'<td>'+(r.valle??'&mdash;')+'</td><td>'+(r.mayor??'&mdash;')+'</td>'
+      +'<td><b>'+(r.totalVentas||0)+'</b></td>'
+      +'<td style="font-weight:700;color:'+bc+'">'+bt+'</td></tr>';
+  });
+  const dt=escH(h.label)+' &mdash; Cerrado a las '+escH(h.hora)+' por '+escH(h.encargado||'&mdash;');
+  const html=buildPrintDoc(dt,hp,hv);
+  const w=window.open('','_blank','width=800,height=900');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(),500);
 }
 
 // ══ IMPRIMIR POR CAJA ══
