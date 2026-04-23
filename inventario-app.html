@@ -530,6 +530,7 @@ tr.dragging{opacity:.4;}
     <div class="modal-sub"   id="hdSub"></div>
     <div id="hdBody"></div>
     <div class="modal-actions">
+      <button class="btn" id="hdBtnDel" style="background:#3a0a0a;color:#ff8080;display:none;">🗑 Eliminar registro</button>
       <button class="btn btn-print" onclick="printHist()">🖨 Imprimir</button>
       <button class="btn btn-ghost" onclick="closeModal('histDetail')">Cerrar</button>
     </div>
@@ -1052,19 +1053,20 @@ async function cerrarDia(){
   if(!requestSession())return;
   rows.forEach(calcRow);
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
-  // Verificar que no haya errores pendientes
+  // Bloquear cierre si hay productos con diferencias
   const rowsConFin = rows.filter(r=>r.fin!==null);
   const conError   = rowsConFin.filter(r=>r.diff!==null && r.diff!==0);
   if(conError.length>0){
-    const nombres = conError.map(r=>{
-      const estado = r.diff<0 ? Math.abs(r.diff)+' faltan' : '+'+r.diff+' sobran';
-      return '"'+r.name+'": '+estado;
+    const lista = conError.map(r=>{
+      if(r.diff<0) return '   ⚠️ Faltan '+Math.abs(r.diff)+' — '+r.name;
+      return '   ⚠️ Sobran '+r.diff+' — '+r.name;
     }).join('\n');
-    const ok = confirm(
-      '\u26A0\uFE0F ATENCIÓN — Hay productos con diferencias:\n\n'+nombres+
-      '\n\n¿Seguro que deseas cerrar el día con estos errores?'
+    alert(
+      '🚫 No se puede cerrar el inventario\n\n'+
+      'Los siguientes productos tienen diferencias:\n\n'+lista+
+      '\n\n✅ Revisa y corrige el Inventario Final de cada producto antes de cerrar.'
     );
-    if(!ok) return;
+    return; // bloquear completamente
   }
   const encargado=prompt('¿Quién hace el cierre del día?\n(Nombre del encargado):');
   if(!encargado||!encargado.trim()){alert('Debes ingresar el nombre del encargado.');return;}
@@ -1115,6 +1117,12 @@ function openHistDetail(idx){
   document.getElementById('hdTitle').textContent=h.label;
   document.getElementById('hdSub').textContent=`Cerrado a las ${h.hora} por ${h.encargado||'—'}`;
   document.getElementById('hdBody').innerHTML=buildHistHTML(h);
+  // Botón eliminar solo para admin
+  const btnDel=document.getElementById('hdBtnDel');
+  if(btnDel){
+    btnDel.style.display=isAdmin()?'inline-flex':'none';
+    btnDel.onclick=()=>eliminarHistorial(idx);
+  }
   closeModal('histOverlay');
   document.getElementById('histDetail').classList.add('open');
 }
@@ -1153,6 +1161,20 @@ function buildHistHTML(h){
   hv+=`</tbody></table>`;
   return hp+hv;
 }
+async function eliminarHistorial(idx){
+  if(!isAdmin()){alert('Solo el administrador puede eliminar registros del historial.');return;}
+  const h=hist[idx];
+  if(!confirm('🗑 ¿Eliminar el registro del historial?\n\n'+h.label+'\nCerrado por: '+(h.encargado||'—')+'\n\nEsta acción no se puede deshacer.'))return;
+  try{
+    await sbDelete('historial',{id:h.id});
+    hist.splice(idx,1);
+    closeModal('histDetail');
+    alert('✅ Registro eliminado del historial.');
+  }catch(e){
+    alert('Error al eliminar: '+e.message);
+  }
+}
+
 function printHist(){
   if(_histIdx===null)return;
   const h=hist[_histIdx];
