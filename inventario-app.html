@@ -933,7 +933,7 @@ function renderBalance(el,bal){
   } else if(bal<0){
     el.innerHTML='<span class="chip chip-bal-pend">▼ '+Math.abs(bal)+' pend.</span>';
   } else {
-    el.innerHTML='<span class="chip chip-bal-over">▲ +'+bal+' extra</span>';
+    el.innerHTML='<span class="chip chip-bal-over">▲ +'+bal+' en ventas</span>';
   }
 }
 
@@ -1191,7 +1191,7 @@ function buildHistHTML(h){
   return hp+hv;
 }
 async function eliminarHistorial(idx){
-  if(!isAdmin()){alert('Solo el administrador puede eliminar registros del historial.');return;}
+  if(!requestAdmin()) return;
   const h=hist[idx];
   if(!confirm('🗑 ¿Eliminar el registro del historial?\n\n'+h.label+'\nCerrado por: '+(h.encargado||'—')+'\n\nEsta acción no se puede deshacer.'))return;
   try{
