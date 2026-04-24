@@ -700,10 +700,35 @@ function setupRealtime(){
 }
 
 async function loadSilent(){
+  // No recargar si el usuario está editando activamente
+  if(document.activeElement && document.activeElement.tagName==='INPUT') return;
   try{
     const prods = await sbGet('productos','order=orden.asc,id.asc');
-    rows = prods.map(p=>({...p}));
-    buildTables();
+    // Fusionar: mantener valores locales si son más recientes
+    prods.forEach(p=>{
+      const local = rows.find(r=>r.id===p.id);
+      if(local){
+        // Solo actualizar campos que no se estén editando localmente
+        // Si local tiene updated_at más reciente, mantener local
+        if(!local._localEdit){
+          local.ant     = (p.ant===0||p.ant===null)?null:p.ant;
+          local.real    = (p.real===0||p.real===null)?null:p.real;
+          local.retorno = (p.retorno===0||p.retorno===null)?null:p.retorno;
+          local.dev     = (p.dev===0||p.dev===null)?null:p.dev;
+          local.fin     = (p.fin===0||p.fin===null)?null:p.fin;
+          local.v1m=(p.v1m===0||p.v1m===null)?null:p.v1m;
+          local.v1t=(p.v1t===0||p.v1t===null)?null:p.v1t;
+          local.v2m=(p.v2m===0||p.v2m===null)?null:p.v2m;
+          local.v2t=(p.v2t===0||p.v2t===null)?null:p.v2t;
+          local.v3m=(p.v3m===0||p.v3m===null)?null:p.v3m;
+          local.v3t=(p.v3t===0||p.v3t===null)?null:p.v3t;
+          local.valle=(p.valle===0||p.valle===null)?null:p.valle;
+          local.mayor=(p.mayor===0||p.mayor===null)?null:p.mayor;
+          calcRow(local);
+          refreshRow(local);
+        }
+      }
+    });
   } catch(e){}
 }
 
@@ -715,8 +740,8 @@ async function saveRow(r){
       id:r.id, name:r.name||'', orden:rows.indexOf(r),
       ant:r.ant, real:r.real, retorno:r.retorno,
       dev:r.dev, fin:r.fin,
-      v1m:r.v1m||0, v1t:r.v1t||0, v2m:r.v2m||0, v2t:r.v2t||0,
-      v3m:r.v3m||0, v3t:r.v3t||0, valle:r.valle||0, mayor:r.mayor||0,
+      v1m:r.v1m, v1t:r.v1t, v2m:r.v2m, v2t:r.v2t,
+      v3m:r.v3m, v3t:r.v3t, valle:r.valle, mayor:r.mayor,
       updated_at: new Date().toISOString()
     };
     await sbUpsert('productos', data);
@@ -876,10 +901,15 @@ function mkNum(r,field){
   inp.placeholder='—';
   inp.style.textAlign='center';
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
-  inp.addEventListener('focus',function(){ this.select(); });
+  inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
+  inp.addEventListener('blur', function(){ 
+    // Quitar marca de edición local 5 segundos después de salir
+    setTimeout(()=>{ r._localEdit=false; }, 5000);
+  });
   inp.addEventListener('input',function(){
     const val=this.value;
     r[field]=val===''?null:parseFloat(val);
+    r._localEdit=true;
     calcRow(r); refreshRow(r); debSave(r);
   });
   td.appendChild(inp); return td;
@@ -1055,18 +1085,32 @@ async function cerrarDia(){
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
   // Bloquear cierre si hay productos con diferencias
   const rowsConFin = rows.filter(r=>r.fin!==null);
-  const conError   = rowsConFin.filter(r=>r.diff!==null && r.diff!==0);
+  // Un producto tiene error REAL si:
+  // diff != 0  Y  el balance de ventas NO cubre la diferencia
+  // Es decir: si falta mercancía (diff<0) pero totalVentas cubre el saleVentas → OK
+  const conError = rowsConFin.filter(r=>{
+    if(r.diff===null || r.diff===0) return false; // OK: cuadra
+    if(r.diff<0){
+      // Faltan unidades: verificar si las ventas cubren lo que falta
+      return r.balance===null || r.balance!==0;
+    }
+    // Sobran unidades: siempre es un error
+    return true;
+  });
   if(conError.length>0){
     const lista = conError.map(r=>{
-      if(r.diff<0) return '   ⚠️ Faltan '+Math.abs(r.diff)+' — '+r.name;
-      return '   ⚠️ Sobran '+r.diff+' — '+r.name;
+      if(r.diff<0 && r.balance!==0){
+        const bal = r.balance<0 ? 'faltan '+Math.abs(r.balance)+' en ventas' : 'sobran '+r.balance+' en ventas';
+        return '   ⚠️ '+r.name+' — '+bal;
+      }
+      return '   ⚠️ '+r.name+' — sobran '+r.diff+' en producción';
     }).join('\n');
     alert(
       '🚫 No se puede cerrar el inventario\n\n'+
-      'Los siguientes productos tienen diferencias:\n\n'+lista+
-      '\n\n✅ Revisa y corrige el Inventario Final de cada producto antes de cerrar.'
+      'Los siguientes productos tienen diferencias sin resolver:\n\n'+lista+
+      '\n\n✅ Verifica el Inventario Final y las ventas de cada producto antes de cerrar.'
     );
-    return; // bloquear completamente
+    return;
   }
   const encargado=prompt('¿Quién hace el cierre del día?\n(Nombre del encargado):');
   if(!encargado||!encargado.trim()){alert('Debes ingresar el nombre del encargado.');return;}
