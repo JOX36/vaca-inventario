@@ -681,53 +681,35 @@ async function loadAll(){
 // ══ REALTIME ══
 function setupRealtime(){
   if(_realtimeChannel) return;
-  // Supabase realtime via websocket
-  try{
-    const wsUrl = SB_URL.replace('https','wss') + '/realtime/v1/websocket?apikey=' + SB_KEY + '&vsn=1.0.0';
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => {
-      ws.send(JSON.stringify({topic:'realtime:public:productos',event:'phx_join',payload:{},ref:'1'}));
-    };
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if(msg.event==='postgres_changes'||msg.payload?.event==='INSERT'||msg.payload?.event==='UPDATE'||msg.payload?.event==='DELETE'){
-        // recargar silenciosamente
-        loadSilent();
-      }
-    };
-    _realtimeChannel = ws;
-  } catch(e){ console.log('Realtime no disponible'); }
+  // Polling suave cada 30s — más confiable que WebSocket en móvil
+  _realtimeChannel = setInterval(()=>{
+    // Solo sincronizar si no hay edición activa y no hay guardado pendiente
+    const hayEdicion = Object.values(_debTimers).some(t=>t!==null&&t!==undefined);
+    const inputActivo = document.activeElement && document.activeElement.tagName==='INPUT';
+    if(!hayEdicion && !inputActivo){
+      loadSilent();
+    }
+  }, 30000);
 }
 
 async function loadSilent(){
-  // No recargar si el usuario está editando activamente
+  // No sincronizar si hay input activo o timers pendientes
   if(document.activeElement && document.activeElement.tagName==='INPUT') return;
+  const hayPendiente = Object.values(_debTimers).some(t=>t!==null&&t!==undefined);
+  if(hayPendiente) return;
   try{
-    const prods = await sbGet('productos','order=orden.asc,id.asc');
-    // Fusionar: mantener valores locales si son más recientes
+    const prods = await sbGet('productos','order=orden.asc,id.asc&select=id,real,retorno,dev,fin,v1m,v1t,v2m,v2t,v3m,v3t,valle,mayor,ant,updated_at');
     prods.forEach(p=>{
       const local = rows.find(r=>r.id===p.id);
-      if(local){
-        // Solo actualizar campos que no se estén editando localmente
-        // Si local tiene updated_at más reciente, mantener local
-        if(!local._localEdit){
-          local.ant     = (p.ant===0||p.ant===null)?null:p.ant;
-          local.real    = (p.real===0||p.real===null)?null:p.real;
-          local.retorno = (p.retorno===0||p.retorno===null)?null:p.retorno;
-          local.dev     = (p.dev===0||p.dev===null)?null:p.dev;
-          local.fin     = (p.fin===0||p.fin===null)?null:p.fin;
-          local.v1m=(p.v1m===0||p.v1m===null)?null:p.v1m;
-          local.v1t=(p.v1t===0||p.v1t===null)?null:p.v1t;
-          local.v2m=(p.v2m===0||p.v2m===null)?null:p.v2m;
-          local.v2t=(p.v2t===0||p.v2t===null)?null:p.v2t;
-          local.v3m=(p.v3m===0||p.v3m===null)?null:p.v3m;
-          local.v3t=(p.v3t===0||p.v3t===null)?null:p.v3t;
-          local.valle=(p.valle===0||p.valle===null)?null:p.valle;
-          local.mayor=(p.mayor===0||p.mayor===null)?null:p.mayor;
-          calcRow(local);
-          refreshRow(local);
-        }
-      }
+      if(!local || local._localEdit) return;
+      // Solo actualizar si Supabase tiene datos y local no tiene edición reciente
+      const campos = ['ant','real','retorno','dev','fin','v1m','v1t','v2m','v2t','v3m','v3t','valle','mayor'];
+      let cambio = false;
+      campos.forEach(k=>{
+        const val = (p[k]===0||p[k]===null) ? null : p[k];
+        if(local[k] !== val){ local[k]=val; cambio=true; }
+      });
+      if(cambio){ calcRow(local); refreshRow(local); }
     });
   } catch(e){}
 }
@@ -746,6 +728,7 @@ async function saveRow(r){
     };
     await sbUpsert('productos', data);
     setSyncStatus('ok','✓ Guardado');
+    r._localEdit = false; // limpiar marca de edición tras guardar exitosamente
   } catch(e){
     setSyncStatus('err','✗ Error al guardar');
     console.error(e);
@@ -888,7 +871,7 @@ function buildVenta(){
 const _debTimers={};
 function debSave(r){
   clearTimeout(_debTimers[r.id]);
-  saveRow(r); // guardar inmediato — evita race condition
+  _debTimers[r.id] = setTimeout(()=>saveRow(r), 400);
 }
 
 function mkNum(r,field){
@@ -903,8 +886,10 @@ function mkNum(r,field){
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
   inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
   inp.addEventListener('blur', function(){ 
-    // Quitar marca de edición local 5 segundos después de salir
-    setTimeout(()=>{ r._localEdit=false; }, 5000);
+    // Al salir del campo, quitar la marca después de que debSave guarde
+    setTimeout(()=>{ 
+      if(!_debTimers[r.id]) r._localEdit=false;
+    }, 600);
   });
   inp.addEventListener('input',function(){
     const val=this.value;
