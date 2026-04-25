@@ -882,31 +882,24 @@ function mkNum(r,field){
   // El problema del cursor se resuelve NO reemplazando this.value en el evento input
   inp.type='number';
   inp.inputMode='decimal';
-  inp.step='any';
+  inp.step='0.5';
   inp.min='0';
   inp.placeholder='—';
   inp.style.textAlign='center';
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
-  inp.addEventListener('focus',function(){
-    this.select();
-    r._localEdit=true;
-  });
+  inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
   inp.addEventListener('blur',function(){
-    // Al salir del campo: normalizar y guardar
     const num=parseFloat(this.value);
-    r[field] = isNaN(num) ? null : num;
-    this.value = isNaN(num) ? '' : num;
-    calcRow(r); refreshRow(r); debSave(r, field);
-    setTimeout(()=>{ if(!_debTimers[r.id]) r._localEdit=false; }, 600);
+    r[field]=isNaN(num)?null:num;
+    this.value=isNaN(num)?'':num;
+    calcRow(r); refreshRow(r); debSave(r,field);
+    setTimeout(()=>{ if(!_debTimers[r.id]) r._localEdit=false; },600);
   });
   inp.addEventListener('change',function(){
-    // 'change' se dispara al confirmar en móvil (Enter o perder foco)
     const num=parseFloat(this.value);
-    r[field] = isNaN(num) ? null : num;
-    calcRow(r); refreshRow(r); debSave(r, field);
+    r[field]=isNaN(num)?null:num;
+    calcRow(r); refreshRow(r); debSave(r,field);
   });
-  // NO usar 'input' para calcular — evita el problema del cursor en Android
-  // El valor se toma en blur/change cuando el usuario termina de escribir
   td.appendChild(inp); return td;
 }
 
@@ -1078,6 +1071,17 @@ async function cerrarDia(){
   if(!requestSession())return;
   rows.forEach(calcRow);
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
+  // Bloquear si hay productos con inventario anterior > 0 sin inventario final
+  const sinFinal = rows.filter(r=>(r.ant||0)>0 && r.fin===null);
+  if(sinFinal.length>0){
+    const lista = sinFinal.map(r=>'   ⚠️ '+r.name+' — tiene '+r.ant+' en anterior sin Inv.Final').join('\n');
+    alert(
+      '🚫 No se puede cerrar el inventario\n\n'+
+      'Los siguientes productos tienen inventario anterior pero no tienen Inventario Final:\n\n'+lista+
+      '\n\n✅ Llena el Inventario Final de cada producto antes de cerrar.'
+    );
+    return;
+  }
   // Bloquear cierre si hay productos con diferencias
   const rowsConFin = rows.filter(r=>r.fin!==null);
   // Un producto tiene error REAL si:
@@ -1125,7 +1129,7 @@ async function cerrarDia(){
   }
   // pasar fin → ant, limpiar
   rows.forEach(r=>{
-    r.ant=r.fin!==null?r.fin:(r.ant||0);
+    r.ant=r.fin!==null?r.fin:r.ant; // mantener anterior si no se llenó fin
     r.real=null;r.retorno=null;r.dev=null;r.fin=null;
     r.v1m=null;r.v1t=null;r.v2m=null;r.v2t=null;r.v3m=null;r.v3t=null;r.valle=null;r.mayor=null;
   });
