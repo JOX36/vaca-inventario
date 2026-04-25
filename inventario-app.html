@@ -641,7 +641,9 @@ function calcRow(r){
   r.dispReal  = r.disp-(r.dev||0);
   r.diff      =(r.fin!==null&&r.fin!==undefined&&r.fin!=='')?(r.fin-r.dispReal):null;
   r.saleVentas=(r.diff!==null&&r.diff<0)?Math.abs(r.diff):0;
-  r.totalVentas=(r.v1m||0)+(r.v1t||0)+(r.v2m||0)+(r.v2t||0)+(r.v3m||0)+(r.v3t||0)+(r.valle||0)+(r.mayor||0);
+  // Convertir NaN a 0 en todos los campos de venta
+  const _v = f => { const n=parseFloat(f); return isNaN(n)?0:n; };
+  r.totalVentas=_v(r.v1m)+_v(r.v1t)+_v(r.v2m)+_v(r.v2t)+_v(r.v3m)+_v(r.v3t)+_v(r.valle)+_v(r.mayor);
   r.balance   =(r.diff!==null)?(r.totalVentas-r.saleVentas):null;
 }
 
@@ -715,23 +717,32 @@ async function loadSilent(){
 }
 
 // ══ SAVE ROW ══
-async function saveRow(r){
-  setSyncStatus('sync','⟳ Guardando...');
+async function saveRow(r, field){
+  setSyncStatus('sync','⟳');
   try{
-    const data={
-      id:r.id, name:r.name||'', orden:rows.indexOf(r),
-      ant:r.ant, real:r.real, retorno:r.retorno,
-      dev:r.dev, fin:r.fin,
-      v1m:r.v1m, v1t:r.v1t, v2m:r.v2m, v2t:r.v2t,
-      v3m:r.v3m, v3t:r.v3t, valle:r.valle, mayor:r.mayor,
-      updated_at: new Date().toISOString()
-    };
-    await sbUpsert('productos', data);
+    if(field){
+      // PATCH solo el campo tocado — evita que dos usuarios se pisen
+      const resp=await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
+        method:'PATCH',
+        headers:{...HEADS,'Prefer':'return=minimal'},
+        body:JSON.stringify({[field]:r[field], updated_at:new Date().toISOString()})
+      });
+      if(!resp.ok) throw new Error(await resp.text());
+    } else {
+      // Guardar fila completa (al cerrar día, drag&drop, etc.)
+      await sbUpsert('productos',{
+        id:r.id, name:r.name||'', orden:rows.indexOf(r),
+        ant:r.ant, real:r.real, retorno:r.retorno, dev:r.dev, fin:r.fin,
+        v1m:r.v1m, v1t:r.v1t, v2m:r.v2m, v2t:r.v2t,
+        v3m:r.v3m, v3t:r.v3t, valle:r.valle, mayor:r.mayor,
+        updated_at:new Date().toISOString()
+      });
+    }
     setSyncStatus('ok','✓ Guardado');
-    r._localEdit = false; // limpiar marca de edición tras guardar exitosamente
+    r._localEdit=false;
   } catch(e){
     setSyncStatus('err','✗ Error al guardar');
-    console.error(e);
+    console.error('saveRow:',e);
   }
 }
 
@@ -796,10 +807,18 @@ function buildProd(){
       inpAnt.value=(r.ant!==null&&r.ant!==undefined)?r.ant:'';
       inpAnt.style.borderColor='#e09090';
       inpAnt.addEventListener('focus',function(){this.select();});
+      inpAnt.addEventListener('blur',function(){
+        const raw=this.value.replace(',','.');
+        const num=parseFloat(raw);
+        r.ant=isNaN(num)?null:num;
+        if(!isNaN(num)) this.value=num;
+        calcRow(r);refreshRow(r);debSave(r);
+      });
       inpAnt.addEventListener('input',function(){
-        const val=this.value.replace(/[^0-9]/g,'');
-        this.value=val;
-        r.ant=val===''?null:parseFloat(val);
+        this.value=this.value.replace(/[^0-9.,]/g,'');
+        const raw=this.value.replace(',','.');
+        const num=parseFloat(raw);
+        r.ant=isNaN(num)?null:num;
         calcRow(r);refreshRow(r);debSave(r);
       });
       tdAnt.appendChild(inpAnt);
@@ -869,33 +888,45 @@ function buildVenta(){
 
 // debounce save para no disparar una petición por cada tecla
 const _debTimers={};
-function debSave(r){
+function debSave(r, field){
   clearTimeout(_debTimers[r.id]);
-  _debTimers[r.id] = setTimeout(()=>saveRow(r), 400);
+  _debTimers[r.id] = setTimeout(()=>saveRow(r, field), 400);
 }
 
 function mkNum(r,field){
   const td=document.createElement('td');
   const inp=document.createElement('input');
-  inp.type='number';
+  inp.type='text';
   inp.inputMode='decimal';
-  inp.step='0.5';
-  inp.min='0';
+  inp.pattern='[0-9]*[.,]?[0-9]*';
   inp.placeholder='—';
   inp.style.textAlign='center';
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
   inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
-  inp.addEventListener('blur', function(){ 
-    // Al salir del campo, quitar la marca después de que debSave guarde
-    setTimeout(()=>{ 
+  inp.addEventListener('blur', function(){
+    // Al salir normalizar el valor (coma → punto)
+    const raw=this.value.replace(',','.');
+    const num=parseFloat(raw);
+    if(!isNaN(num)){
+      r[field]=num;
+      this.value=num;
+    } else {
+      r[field]=null;
+      this.value='';
+    }
+    calcRow(r); refreshRow(r); debSave(r);
+    setTimeout(()=>{
       if(!_debTimers[r.id]) r._localEdit=false;
     }, 600);
   });
   inp.addEventListener('input',function(){
-    const val=this.value;
-    r[field]=val===''?null:parseFloat(val);
+    // Permitir escribir libremente, solo filtrar caracteres inválidos
+    this.value=this.value.replace(/[^0-9.,]/g,'');
+    const raw=this.value.replace(',','.');
+    const num=parseFloat(raw);
+    r[field]=isNaN(num)?null:num;
     r._localEdit=true;
-    calcRow(r); refreshRow(r); debSave(r);
+    calcRow(r); refreshRow(r); debSave(r, field);
   });
   td.appendChild(inp); return td;
 }
@@ -1119,12 +1150,21 @@ async function cerrarDia(){
     r.real=null;r.retorno=null;r.dev=null;r.fin=null;
     r.v1m=null;r.v1t=null;r.v2m=null;r.v2t=null;r.v3m=null;r.v3t=null;r.valle=null;r.mayor=null;
   });
+  // Limpiar marcas de edición local
+  rows.forEach(r=>{ r._localEdit=false; });
+  setSyncStatus('sync','⟳ Guardando...');
+  // Guardar PRIMERO en Supabase, luego actualizar UI
+  try{
+    for(const r of rows){ await saveRow(r); }
+  }catch(e){
+    alert('⚠️ Error al guardar: '+e.message);
+  }
+  // Ahora reconstruir UI con datos limpios
   buildTables();
-  // guardar todos
-  for(const r of rows){ await saveRow(r); }
+  setSyncStatus('ok','✓ Todo guardado');
   // recargar historial
   try{ const h=await sbGet('historial','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
-  alert(`✅ Día cerrado a las ${timeStr}.\nInventario final copiado como anterior.`);
+  alert('✅ Día cerrado a las '+timeStr+'.\nInventario final copiado como anterior de mañana.');
 }
 
 // ══ HISTORIAL ══
