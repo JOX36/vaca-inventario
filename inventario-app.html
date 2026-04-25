@@ -535,7 +535,8 @@ tr.dragging{opacity:.4;}
     <div class="modal-sub"   id="hdSub"></div>
     <div id="hdBody"></div>
     <div class="modal-actions">
-      <button class="btn" id="hdBtnDel" style="background:#3a0a0a;color:#ff8080;display:none;">🗑 Eliminar registro</button>
+      <button class="btn" id="hdBtnDel" style="background:#3a0a0a;color:#ff8080;display:none;">🗑 Eliminar</button>
+      <button class="btn" id="hdBtnEdit" style="background:#1a3a1a;color:#7dbb7d;display:none;">✏️ Editar día</button>
       <button class="btn btn-print" onclick="printHist()">🖨 Imprimir</button>
       <button class="btn btn-ghost" onclick="closeModal('histDetail')">Cerrar</button>
     </div>
@@ -585,6 +586,38 @@ tr.dragging{opacity:.4;}
       <button class="btn btn-hist" onclick="buscarProduccion()">🔍 Buscar</button>
     </div>
     <div id="buscResultado"></div>
+  </div>
+</div>
+
+<!-- MODAL EDITOR DE HISTORIAL -->
+<div class="overlay" id="histEditOverlay">
+  <div class="modal" style="max-width:700px;">
+    <button class="modal-x" onclick="closeModal('histEditOverlay')">✕</button>
+    <div class="modal-title">✏️ Editar Inventario Histórico</div>
+    <div class="modal-sub" id="histEditSub">Editando día —</div>
+    <div style="background:#fff8e6;border:1px solid #f0c040;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:#7a4a00;">
+      ⚠️ Estás editando un inventario ya cerrado. Los cambios actualizarán el historial
+      <b>y el inventario anterior del día siguiente</b> automáticamente.
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:.8rem;" id="histEditTable">
+        <thead>
+          <tr style="background:var(--negro);color:white;">
+            <th style="padding:7px 8px;text-align:left;">Producto</th>
+            <th style="padding:7px 8px;">Ant.</th>
+            <th style="padding:7px 8px;">Realizada</th>
+            <th style="padding:7px 8px;">Retorno</th>
+            <th style="padding:7px 8px;">Dev.</th>
+            <th style="padding:7px 8px;">Inv.Final</th>
+          </tr>
+        </thead>
+        <tbody id="histEditBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-cerrar" id="histEditSaveBtn">💾 Guardar cambios</button>
+      <button class="btn btn-ghost" onclick="closeModal('histEditOverlay')">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -1175,6 +1208,11 @@ function openHistDetail(idx){
     btnDel.style.display=isAdmin()?'inline-flex':'none';
     btnDel.onclick=()=>eliminarHistorial(idx);
   }
+  const btnEdit=document.getElementById('hdBtnEdit');
+  if(btnEdit){
+    btnEdit.style.display=isAdmin()?'inline-flex':'none';
+    btnEdit.onclick=()=>abrirEditorHistorial(idx);
+  }
   closeModal('histOverlay');
   document.getElementById('histDetail').classList.add('open');
 }
@@ -1697,7 +1735,106 @@ async function buscarProduccion(){
   }
 }
 
+
+// ══ EDITOR DE HISTORIAL ══
+let _editHistIdx = null;
+let _editSnap    = [];
+
+function abrirEditorHistorial(idx){
+  if(!requestAdmin()) return;
+  const h = hist[idx];
+  _editHistIdx = idx;
+  // Clonar snapshot para editar
+  _editSnap = (h.snapshot||[]).map(r=>({...r}));
+  document.getElementById('histEditSub').textContent = 'Editando: '+h.label+' — Cerrado por '+(h.encargado||'—');
+  buildHistEditTable();
+  closeModal('histDetail');
+  document.getElementById('histEditOverlay').classList.add('open');
+}
+
+function buildHistEditTable(){
+  const tbody = document.getElementById('histEditBody');
+  tbody.innerHTML = '';
+  _editSnap.forEach((r,i)=>{
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid var(--gris2)';
+    if(i%2===0) tr.style.background = '#fdfaf6';
+
+    // Nombre
+    const tdN=document.createElement('td');
+    tdN.style.cssText='padding:5px 8px;font-weight:500;font-size:.8rem;';
+    tdN.textContent=r.name||'—';
+    tr.appendChild(tdN);
+
+    // Campos editables
+    ['ant','real','retorno','dev','fin'].forEach(field=>{
+      const td=document.createElement('td');
+      td.style.padding='4px 6px';
+      const inp=document.createElement('input');
+      inp.type='number'; inp.step='0.5'; inp.min='0';
+      inp.style.cssText='width:60px;padding:3px 4px;border:1.5px solid var(--gris2);border-radius:4px;font-size:.78rem;text-align:center;background:var(--gris1);';
+      inp.value=(r[field]!==null&&r[field]!==undefined)?r[field]:'';
+      inp.placeholder='—';
+      inp.addEventListener('change',(function(row,f){return function(){
+        const num=parseFloat(this.value);
+        row[f]=isNaN(num)?null:num;
+      };})(r,field));
+      inp.addEventListener('focus',function(){this.select();});
+      td.appendChild(inp);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+async function guardarEditorHistorial(){
+  if(_editHistIdx===null) return;
+  const h = hist[_editHistIdx];
+  setSyncStatus('sync','⟳ Guardando historial...');
+  try{
+    // Actualizar snapshot en historial
+    await fetch(SB_URL+'/rest/v1/historial?id=eq.'+h.id,{
+      method:'PATCH',
+      headers:{...HEADS,'Prefer':'return=minimal'},
+      body:JSON.stringify({snapshot:_editSnap})
+    });
+
+    // Actualizar hist local
+    hist[_editHistIdx].snapshot = _editSnap;
+
+    // Actualizar ant del día actual (rows) con los fin del snapshot editado
+    let cambios = 0;
+    _editSnap.forEach(snap=>{
+      const row = rows.find(r=>r.id===snap.id||r.name===snap.name);
+      if(row){
+        const nuevoAnt = snap.fin!==null ? snap.fin : row.ant;
+        if(row.ant !== nuevoAnt){
+          row.ant = nuevoAnt;
+          cambios++;
+        }
+      }
+    });
+
+    if(cambios>0){
+      // Guardar ant actualizado en Supabase para cada fila que cambió
+      for(const snap of _editSnap){
+        const row=rows.find(r=>r.id===snap.id||r.name===snap.name);
+        if(row) await saveRow(row,'ant');
+      }
+      buildTables();
+    }
+
+    setSyncStatus('ok','✓ Historial actualizado');
+    closeModal('histEditOverlay');
+    alert('✅ Historial del '+h.label+' actualizado.\n'+(cambios>0?cambios+' inventario(s) anterior(es) sincronizados.':'Sin cambios en el día actual.'));
+  }catch(e){
+    setSyncStatus('err','✗ Error');
+    alert('Error al guardar: '+e.message);
+  }
+}
+
 // ══ INIT ══
+document.getElementById('histEditSaveBtn').addEventListener('click', guardarEditorHistorial);
 document.getElementById('hDate').textContent=new Date().toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'});
 loadAll();
 
