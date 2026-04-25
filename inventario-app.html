@@ -162,13 +162,18 @@ td.left{text-align:left;}
 
 /* Inputs dentro de tabla */
 td input{
-  font-family:'Inter',sans-serif;font-size:.8rem;
-  width:100%;padding:4px 5px;
+  font-family:'Inter',sans-serif;font-size:.78rem;
+  width:100%;padding:3px 3px;
   border:1.5px solid var(--gris2);border-radius:4px;
   background:var(--gris1);color:var(--texto);text-align:center;
   transition:border-color .15s,background .15s,box-shadow .15s;
-  min-width:44px;max-width:80px;
+  min-width:40px;max-width:68px;
+  -webkit-appearance:none;appearance:none;
 }
+/* Quitar flechas de number en todos los navegadores */
+td input[type=number]::-webkit-inner-spin-button,
+td input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+td input[type=number]{-moz-appearance:textfield;}
 td input[type="text"]{text-align:left;min-width:130px;}
 td input:focus{
   outline:none;
@@ -682,38 +687,15 @@ async function loadAll(){
 
 // ══ REALTIME ══
 function setupRealtime(){
-  if(_realtimeChannel) return;
-  // Polling suave cada 30s — más confiable que WebSocket en móvil
-  _realtimeChannel = setInterval(()=>{
-    // Solo sincronizar si no hay edición activa y no hay guardado pendiente
-    const hayEdicion = Object.values(_debTimers).some(t=>t!==null&&t!==undefined);
-    const inputActivo = document.activeElement && document.activeElement.tagName==='INPUT';
-    if(!hayEdicion && !inputActivo){
-      loadSilent();
-    }
-  }, 30000);
+  // Sincronización automática desactivada — causa interferencia con edición activa
+  // El guardado se hace campo por campo via PATCH al salir de cada celda
+  // Si se necesita sincronizar, el usuario puede recargar la página
+  _realtimeChannel = true; // marcar como inicializado para no re-ejecutar
 }
 
 async function loadSilent(){
-  // No sincronizar si hay input activo o timers pendientes
-  if(document.activeElement && document.activeElement.tagName==='INPUT') return;
-  const hayPendiente = Object.values(_debTimers).some(t=>t!==null&&t!==undefined);
-  if(hayPendiente) return;
-  try{
-    const prods = await sbGet('productos','order=orden.asc,id.asc&select=id,real,retorno,dev,fin,v1m,v1t,v2m,v2t,v3m,v3t,valle,mayor,ant,updated_at');
-    prods.forEach(p=>{
-      const local = rows.find(r=>r.id===p.id);
-      if(!local || local._localEdit) return;
-      // Solo actualizar si Supabase tiene datos y local no tiene edición reciente
-      const campos = ['ant','real','retorno','dev','fin','v1m','v1t','v2m','v2t','v3m','v3t','valle','mayor'];
-      let cambio = false;
-      campos.forEach(k=>{
-        const val = (p[k]===0||p[k]===null) ? null : p[k];
-        if(local[k] !== val){ local[k]=val; cambio=true; }
-      });
-      if(cambio){ calcRow(local); refreshRow(local); }
-    });
-  } catch(e){}
+  // Desactivado — la sincronización automática causaba interferencia
+  // con las ediciones activas del usuario
 }
 
 // ══ SAVE ROW ══
@@ -896,38 +878,35 @@ function debSave(r, field){
 function mkNum(r,field){
   const td=document.createElement('td');
   const inp=document.createElement('input');
-  inp.type='text';
+  // type=number funciona mejor en Android para decimales
+  // El problema del cursor se resuelve NO reemplazando this.value en el evento input
+  inp.type='number';
   inp.inputMode='decimal';
-  inp.pattern='[0-9]*[.,]?[0-9]*';
+  inp.step='any';
+  inp.min='0';
   inp.placeholder='—';
   inp.style.textAlign='center';
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
-  inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
-  inp.addEventListener('blur', function(){
-    // Al salir normalizar el valor (coma → punto)
-    const raw=this.value.replace(',','.');
-    const num=parseFloat(raw);
-    if(!isNaN(num)){
-      r[field]=num;
-      this.value=num;
-    } else {
-      r[field]=null;
-      this.value='';
-    }
-    calcRow(r); refreshRow(r); debSave(r);
-    setTimeout(()=>{
-      if(!_debTimers[r.id]) r._localEdit=false;
-    }, 600);
-  });
-  inp.addEventListener('input',function(){
-    // Permitir escribir libremente, solo filtrar caracteres inválidos
-    this.value=this.value.replace(/[^0-9.,]/g,'');
-    const raw=this.value.replace(',','.');
-    const num=parseFloat(raw);
-    r[field]=isNaN(num)?null:num;
+  inp.addEventListener('focus',function(){
+    this.select();
     r._localEdit=true;
+  });
+  inp.addEventListener('blur',function(){
+    // Al salir del campo: normalizar y guardar
+    const num=parseFloat(this.value);
+    r[field] = isNaN(num) ? null : num;
+    this.value = isNaN(num) ? '' : num;
+    calcRow(r); refreshRow(r); debSave(r, field);
+    setTimeout(()=>{ if(!_debTimers[r.id]) r._localEdit=false; }, 600);
+  });
+  inp.addEventListener('change',function(){
+    // 'change' se dispara al confirmar en móvil (Enter o perder foco)
+    const num=parseFloat(this.value);
+    r[field] = isNaN(num) ? null : num;
     calcRow(r); refreshRow(r); debSave(r, field);
   });
+  // NO usar 'input' para calcular — evita el problema del cursor en Android
+  // El valor se toma en blur/change cuando el usuario termina de escribir
   td.appendChild(inp); return td;
 }
 
