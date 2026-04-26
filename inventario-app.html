@@ -687,6 +687,7 @@ function calcRow(r){
 
 // ══ LOAD FROM SUPABASE ══
 async function loadAll(){
+  if(window._cerrando) return; // no recargar durante cierre
   setSyncStatus('sync','⟳ Cargando...');
   try{
     const [prods, hists, trashItems] = await Promise.all([
@@ -1102,6 +1103,8 @@ async function emptyTrash(){
 // ══ CERRAR DÍA ══
 async function cerrarDia(){
   if(!requestSession())return;
+  if(window._cerrando){ alert('Ya hay un cierre en proceso, espera.'); return; }
+  window._cerrando = true;
   rows.forEach(calcRow);
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
   // Bloquear si hay productos con inventario anterior > 0 sin inventario final
@@ -1169,17 +1172,39 @@ async function cerrarDia(){
   // Limpiar marcas de edición local
   rows.forEach(r=>{ r._localEdit=false; });
   setSyncStatus('sync','⟳ Guardando...');
-  // Guardar PRIMERO en Supabase, luego actualizar UI
+  // Guardar con PATCH explícito — garantiza que los nulls se escriben correctamente
+  // sbUpsert puede ignorar nulls en algunos casos, PATCH no
   try{
-    for(const r of rows){ await saveRow(r); }
+    for(const r of rows){
+      const resp = await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
+        method:'PATCH',
+        headers:{...HEADS,'Prefer':'return=minimal'},
+        body:JSON.stringify({
+          ant:     r.ant,
+          real:    null,
+          retorno: null,
+          dev:     null,
+          fin:     null,
+          v1m:null, v1t:null, v2m:null, v2t:null,
+          v3m:null, v3t:null, valle:null, mayor:null,
+          updated_at: new Date().toISOString()
+        })
+      });
+      if(!resp.ok){
+        const txt = await resp.text();
+        console.error('Error guardando '+r.name+':', txt);
+      }
+    }
   }catch(e){
-    alert('⚠️ Error al guardar: '+e.message);
+    alert('⚠️ Error al guardar el inventario: '+e.message+'\nIntenta de nuevo.');
+    return;
   }
   // Ahora reconstruir UI con datos limpios
   buildTables();
   setSyncStatus('ok','✓ Todo guardado');
   // recargar historial
   try{ const h=await sbGet('historial','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
+  window._cerrando = false;
   alert('✅ Día cerrado a las '+timeStr+'.\nInventario final copiado como anterior de mañana.');
 }
 
