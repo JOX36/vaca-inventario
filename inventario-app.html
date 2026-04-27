@@ -1104,7 +1104,6 @@ async function emptyTrash(){
 async function cerrarDia(){
   if(!requestSession())return;
   if(window._cerrando){ alert('Ya hay un cierre en proceso, espera.'); return; }
-  window._cerrando = true;
   rows.forEach(calcRow);
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
   // Bloquear si hay productos con inventario anterior > 0 sin inventario final
@@ -1120,16 +1119,9 @@ async function cerrarDia(){
   }
   // Bloquear cierre si hay productos con diferencias
   const rowsConFin = rows.filter(r=>r.fin!==null);
-  // Un producto tiene error REAL si:
-  // diff != 0  Y  el balance de ventas NO cubre la diferencia
-  // Es decir: si falta mercancía (diff<0) pero totalVentas cubre el saleVentas → OK
   const conError = rowsConFin.filter(r=>{
-    if(r.diff===null || r.diff===0) return false; // OK: cuadra
-    if(r.diff<0){
-      // Faltan unidades: verificar si las ventas cubren lo que falta
-      return r.balance===null || r.balance!==0;
-    }
-    // Sobran unidades: siempre es un error
+    if(r.diff===null || r.diff===0) return false;
+    if(r.diff<0){ return r.balance===null || r.balance!==0; }
     return true;
   });
   if(conError.length>0){
@@ -1150,6 +1142,8 @@ async function cerrarDia(){
   const encargado=prompt('¿Quién hace el cierre del día?\n(Nombre del encargado):');
   if(!encargado||!encargado.trim()){alert('Debes ingresar el nombre del encargado.');return;}
   if(!confirm('¿Cerrar el día de hoy?\n• Se guarda en historial.\n• Inv. Final → Inv. Anterior de mañana.\n• Se limpian campos de producción y ventas.'))return;
+  // Activar flag SOLO después de todas las validaciones y confirmaciones
+  window._cerrando = true;
   const now=new Date();
   const label=now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const timeStr=now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
