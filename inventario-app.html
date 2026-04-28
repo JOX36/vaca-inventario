@@ -534,10 +534,11 @@ tr.dragging{opacity:.4;}
     <div class="modal-title" id="hdTitle"></div>
     <div class="modal-sub"   id="hdSub"></div>
     <div id="hdBody"></div>
-    <div class="modal-actions">
+    <div class="modal-actions" style="flex-wrap:wrap;gap:6px;">
       <button class="btn" id="hdBtnDel" style="background:#3a0a0a;color:#ff8080;display:none;">🗑 Eliminar</button>
       <button class="btn" id="hdBtnEdit" style="background:#1a3a1a;color:#7dbb7d;display:none;">✏️ Editar día</button>
-      <button class="btn btn-print" onclick="printHist()">🖨 Imprimir</button>
+      <button class="btn btn-caja" id="hdBtnCaja" onclick="openCajaDesdeHistorial()">🖨 Por Caja</button>
+      <button class="btn btn-print" onclick="printHist()">🖨 Consolidado</button>
       <button class="btn btn-ghost" onclick="closeModal('histDetail')">Cerrar</button>
     </div>
   </div>
@@ -922,17 +923,26 @@ function mkNum(r,field){
   inp.style.textAlign='center';
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
   inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
+  inp.addEventListener('input',function(){
+    // Actualizar objeto en memoria SIN tocar this.value (evita salto de cursor en Android)
+    const num=parseFloat(this.value);
+    r[field]=isNaN(num)?null:num;
+    r._localEdit=true;
+    calcRow(r); refreshRow(r);
+    // Programar guardado — se cancela y reprograma con cada tecla
+    debSave(r,field);
+  });
   inp.addEventListener('blur',function(){
+    // Al salir: normalizar y guardar inmediatamente
     const num=parseFloat(this.value);
     r[field]=isNaN(num)?null:num;
     this.value=isNaN(num)?'':num;
-    calcRow(r); refreshRow(r); debSave(r,field);
-    setTimeout(()=>{ if(!_debTimers[r.id]) r._localEdit=false; },600);
-  });
-  inp.addEventListener('change',function(){
-    const num=parseFloat(this.value);
-    r[field]=isNaN(num)?null:num;
-    calcRow(r); refreshRow(r); debSave(r,field);
+    calcRow(r); refreshRow(r);
+    // Cancelar timer y guardar de inmediato
+    clearTimeout(_debTimers[r.id]);
+    _debTimers[r.id]=null;
+    saveRow(r,field);
+    setTimeout(()=>{ r._localEdit=false; },800);
   });
   td.appendChild(inp); return td;
 }
@@ -1340,13 +1350,15 @@ function openCajaModal(){
 }
 function imprimirCaja(){
   if(!_cajaField){alert('Selecciona una caja primero.');return;}
-  rows.forEach(calcRow);
+  // Usar snapshot del historial si viene desde historial
+  const sourceRows = _cajaFromHist || rows;
+  if(!_cajaFromHist) sourceRows.forEach(calcRow);
   const caja    = CAJAS[_cajaField];
   const cajero  = document.getElementById('cajeroNombre').value.trim();
   const now     = new Date();
   const fecha   = now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const hora    = now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const prods   = rows.filter(r=>r[_cajaField]!==null && r[_cajaField]!==undefined && r[_cajaField]!=='' && parseFloat(r[_cajaField])>0);
+  const prods   = sourceRows.filter(r=>r[_cajaField]!==null && r[_cajaField]!==undefined && r[_cajaField]!=='' && parseFloat(r[_cajaField])>0);
   if(!prods.length){alert('No hay productos registrados para esa caja.');return;}
 
   var filas = '';
@@ -1358,6 +1370,7 @@ function imprimirCaja(){
       + '</tr>';
   });
   var total = prods.reduce(function(s,r){return s+(r[_cajaField]||0);},0);
+  _cajaFromHist = null; // limpiar después de usar
   var cajeroBox = cajero
     ? '<div style="background:#f5ece0;border-left:3px solid #7c4a1e;padding:5px 10px;margin-bottom:10px;font-size:8.5pt;">&#128100; <b>Cajero/Responsable:</b> '+escH(cajero)+'</div>'
     : '';
@@ -1851,6 +1864,23 @@ async function guardarEditorHistorial(){
     alert('Error al guardar: '+e.message);
   }
 }
+
+
+// ══ IMPRIMIR POR CAJA DESDE HISTORIAL ══
+function openCajaDesdeHistorial(){
+  if(_histIdx===null) return;
+  const h = hist[_histIdx];
+  const snap = h.snapshot || [];
+  if(!snap.length){ alert('Este historial no tiene productos.'); return; }
+
+  // Usar el mismo modal de caja pero con datos del historial
+  _cajaFromHist = snap;
+  closeModal('histDetail');
+  document.getElementById('cajaOverlay').classList.add('open');
+}
+
+// Flag para saber si imprimirCaja viene del historial
+let _cajaFromHist = null;
 
 // ══ INIT ══
 document.getElementById('histEditSaveBtn').addEventListener('click', guardarEditorHistorial);
