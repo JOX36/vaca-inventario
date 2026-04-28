@@ -1270,8 +1270,9 @@ function openHistDetail(idx){
   _histIdx=idx; const h=hist[idx];
   document.getElementById('hdTitle').textContent=h.label;
   const encStr = 'Cerrado a las '+h.hora+' por '+(h.encargado||'—');
+  // Mostrar siempre el botón — la clave se pide dentro de abrirEditarEncargado
   document.getElementById('hdSub').innerHTML = encStr
-    + (isAdmin() ? ' <button onclick="abrirEditarEncargado('+idx+')" style="background:none;border:none;cursor:pointer;color:var(--madera);font-size:.75rem;text-decoration:underline;font-family:Inter,sans-serif;">✏️ editar</button>' : '');
+    + ' <button onclick="abrirEditarEncargado('+idx+')" style="background:none;border:none;cursor:pointer;color:var(--madera);font-size:.75rem;text-decoration:underline;font-family:Inter,sans-serif;">✏️ editar</button>';
   document.getElementById('hdBody').innerHTML=buildHistHTML(h);
   // Botón eliminar solo para admin
   const btnDel=document.getElementById('hdBtnDel');
