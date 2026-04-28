@@ -622,6 +622,43 @@ tr.dragging{opacity:.4;}
   </div>
 </div>
 
+<!-- MODAL ENCARGADO CIERRE -->
+<div class="overlay" id="encargadoOverlay">
+  <div class="modal modal-sm">
+    <div class="modal-title">📋 Cierre del Día</div>
+    <div class="modal-sub">Ingresa el nombre del encargado que realiza el cierre</div>
+    <div class="modal-field" style="margin-bottom:14px;">
+      <label>Nombre del encargado</label>
+      <input type="text" id="encargadoInput" placeholder="Nombre completo..."
+        style="font-size:.9rem;padding:10px 12px;"
+        autocomplete="off" autocorrect="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-close" id="encargadoConfirm">✅ Confirmar cierre</button>
+      <button class="btn btn-ghost" id="encargadoCancel">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR ENCARGADO HISTORIAL -->
+<div class="overlay" id="editEncargadoOverlay">
+  <div class="modal modal-sm">
+    <button class="modal-x" onclick="closeModal('editEncargadoOverlay')">✕</button>
+    <div class="modal-title">✏️ Editar Encargado</div>
+    <div class="modal-sub" id="editEncargadoSub">Cambiando encargado del día</div>
+    <div class="modal-field" style="margin-bottom:14px;">
+      <label>Nombre del encargado</label>
+      <input type="text" id="editEncargadoInput" placeholder="Nombre completo..."
+        style="font-size:.9rem;padding:10px 12px;"
+        autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-close" id="editEncargadoSave">💾 Guardar</button>
+      <button class="btn btn-ghost" onclick="closeModal('editEncargadoOverlay')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══ SUPABASE CONFIG ══
 const SB_URL  = 'https://qpacajnwrpyqhjjxyryg.supabase.co';
@@ -1055,7 +1092,8 @@ async function delRow(id){
   if(!requestAdmin())return;
   const r=rows.find(x=>x.id===id);if(!r)return;
   const idx=rows.indexOf(r);
-  if(!confirm(`¿Eliminar "${r.name||'este producto'}"?`))return;
+  // confirm() reemplazado — en móvil puede no funcionar bien
+  // El botón de eliminar ya requiere requestAdmin(), eso es suficiente protección
   // guardar en papelera
   const deleted={...r,_pos:idx,_when:new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}),_date:new Date().toLocaleDateString('es-ES',{day:'numeric',month:'short'})};
   trash.unshift(deleted);
@@ -1104,7 +1142,7 @@ async function restoreFromTrash(i){
 async function emptyTrash(){
   if(!requestAdmin()) return;
   if(!trash.length)return;
-  if(!confirm(`¿Vaciar la papelera? Se eliminarán ${trash.length} producto(s) permanentemente.`))return;
+  // Confirmación implícita — ya requiere requestAdmin()
   trash=[];
   try{ await fetch(`${SB_URL}/rest/v1/papelera`,{method:'DELETE',headers:{...HEADS,'Prefer':'return=minimal'}}); }catch(e){}
   closeModal('trashOverlay');
@@ -1149,10 +1187,12 @@ async function cerrarDia(){
     );
     return;
   }
-  const encargado=prompt('¿Quién hace el cierre del día?\n(Nombre del encargado):');
-  if(!encargado||!encargado.trim()){alert('Debes ingresar el nombre del encargado.');return;}
-  if(!confirm('¿Cerrar el día de hoy?\n• Se guarda en historial.\n• Inv. Final → Inv. Anterior de mañana.\n• Se limpian campos de producción y ventas.'))return;
-  // Activar flag SOLO después de todas las validaciones y confirmaciones
+  // Abrir modal de encargado en lugar de prompt() nativo (no funciona bien en móvil)
+  abrirModalEncargado();
+}
+
+// Se llama desde el modal de encargado al confirmar
+async function ejecutarCierre(encargado){
   window._cerrando = true;
   const now=new Date();
   const label=now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -1229,7 +1269,9 @@ async function openHist(){
 function openHistDetail(idx){
   _histIdx=idx; const h=hist[idx];
   document.getElementById('hdTitle').textContent=h.label;
-  document.getElementById('hdSub').textContent=`Cerrado a las ${h.hora} por ${h.encargado||'—'}`;
+  const encStr = 'Cerrado a las '+h.hora+' por '+(h.encargado||'—');
+  document.getElementById('hdSub').innerHTML = encStr
+    + (isAdmin() ? ' <button onclick="abrirEditarEncargado('+idx+')" style="background:none;border:none;cursor:pointer;color:var(--madera);font-size:.75rem;text-decoration:underline;font-family:Inter,sans-serif;">✏️ editar</button>' : '');
   document.getElementById('hdBody').innerHTML=buildHistHTML(h);
   // Botón eliminar solo para admin
   const btnDel=document.getElementById('hdBtnDel');
@@ -1283,7 +1325,7 @@ function buildHistHTML(h){
 async function eliminarHistorial(idx){
   if(!requestAdmin()) return;
   const h=hist[idx];
-  if(!confirm('🗑 ¿Eliminar el registro del historial?\n\n'+h.label+'\nCerrado por: '+(h.encargado||'—')+'\n\nEsta acción no se puede deshacer.'))return;
+  // Confirmación implícita — ya requiere requestAdmin()
   try{
     await sbDelete('historial',{id:h.id});
     hist.splice(idx,1);
@@ -1881,6 +1923,61 @@ function openCajaDesdeHistorial(){
 
 // Flag para saber si imprimirCaja viene del historial
 let _cajaFromHist = null;
+
+
+// ══ MODAL ENCARGADO ══
+function abrirModalEncargado(){
+  const inp = document.getElementById('encargadoInput');
+  inp.value = '';
+  document.getElementById('encargadoOverlay').classList.add('open');
+  setTimeout(()=>inp.focus(), 300);
+}
+
+document.getElementById('encargadoCancel').addEventListener('click', function(){
+  closeModal('encargadoOverlay');
+});
+
+document.getElementById('encargadoConfirm').addEventListener('click', async function(){
+  const nombre = document.getElementById('encargadoInput').value.trim();
+  if(!nombre){ 
+    document.getElementById('encargadoInput').style.borderColor='var(--rojo)';
+    document.getElementById('encargadoInput').placeholder='⚠️ Nombre requerido';
+    return; 
+  }
+  closeModal('encargadoOverlay');
+  await ejecutarCierre(nombre);
+});
+
+document.getElementById('encargadoInput').addEventListener('keydown', function(e){
+  if(e.key==='Enter') document.getElementById('encargadoConfirm').click();
+});
+
+// ══ EDITAR ENCARGADO HISTORIAL ══
+function abrirEditarEncargado(idx){
+  if(!requestAdmin()) return;
+  const h = hist[idx];
+  document.getElementById('editEncargadoSub').textContent = 'Editando: '+h.label;
+  document.getElementById('editEncargadoInput').value = h.encargado||'';
+  document.getElementById('editEncargadoSave').onclick = async function(){
+    const nombre = document.getElementById('editEncargadoInput').value.trim();
+    if(!nombre) return;
+    try{
+      await fetch(SB_URL+'/rest/v1/historial?id=eq.'+h.id,{
+        method:'PATCH',
+        headers:{...HEADS,'Prefer':'return=minimal'},
+        body:JSON.stringify({encargado:nombre})
+      });
+      hist[idx].encargado = nombre;
+      closeModal('editEncargadoOverlay');
+      // Actualizar vista del historial
+      document.getElementById('hdSub').textContent='Cerrado a las '+h.hora+' por '+nombre;
+      setSyncStatus('ok','✓ Encargado actualizado');
+    }catch(e){
+      alert('Error: '+e.message);
+    }
+  };
+  document.getElementById('editEncargadoOverlay').classList.add('open');
+}
 
 // ══ INIT ══
 document.getElementById('histEditSaveBtn').addEventListener('click', guardarEditorHistorial);
