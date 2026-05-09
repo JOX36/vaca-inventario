@@ -720,18 +720,14 @@ const COL = {
   retorno:    'retorno',
   dev:        'desarrollador',
   fin:        'aleta',
-  v1m:        'v1m',
-  v1t:        'v1t',
-  v2m:        'v2m',
-  v2t:        'v2t',
-  v3m:        'v3m',
-  v3t:        'v3t',
+  v1m:        'v1m', v1t:'v1t',
+  v2m:        'v2m', v2t:'v2t',
+  v3m:        'v3m', v3t:'v3t',
   armenia:    'valle',
   xmayor:     'alcalde',
   orden:      'orden',
   updated_at: 'updated_at',
 };
-// Convierte objeto con campos JS a objeto con columnas Supabase
 function toSB(obj){
   const out={};
   for(const k in obj) out[COL[k]||k]=obj[k];
@@ -811,7 +807,7 @@ async function saveRow(r, field){
       const resp=await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
-        body:JSON.stringify({[colName]:r[field], [COL.updated_at]:new Date().toISOString()})
+        body:JSON.stringify({[colName]:r[field], updated_at:new Date().toISOString()})
       });
       if(!resp.ok){
         const txt=await resp.text();
