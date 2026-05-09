@@ -454,11 +454,10 @@ tr.dragging{opacity:.4;}
         <tr class="head-main">
           <th class="left th-base" rowspan="2" style="min-width:130px">Producto</th>
           <th class="th-diff"  rowspan="2" style="min-width:55px">Sale a<br>Ventas</th>
-          <th class="th-punto col-sep" colspan="2">KM 25</th>
-          <th class="th-punto col-sep" colspan="2">KM 18</th>
-          <th class="th-punto col-sep" colspan="2">Peñón</th>
-          <th class="th-punto col-sep" colspan="2">Colseguros</th>
-          <th class="th-mayor col-sep" rowspan="2" style="min-width:58px;background:#2a1a3a!important">Armenia</th>
+          <th class="th-punto col-sep" colspan="2">Autopista</th>
+          <th class="th-punto col-sep" colspan="2">Boquia</th>
+          <th class="th-punto col-sep" colspan="2">Tebaida</th>
+          <th class="th-mayor col-sep" rowspan="2" style="min-width:58px;background:#2a1a3a!important">Valle</th>
           <th class="th-mayor col-sep" rowspan="2" style="min-width:58px">X Mayor</th>
           <th class="th-bal   col-sep" rowspan="2" style="min-width:78px">Balance</th>
         </tr>
@@ -718,20 +717,12 @@ function calcRow(r){
   r.dispReal  = r.disp-(r.dev||0);
   r.diff      =(r.fin!==null&&r.fin!==undefined&&r.fin!=='')?(r.fin-r.dispReal):null;
   r.saleVentas=(r.diff!==null&&r.diff<0)?Math.abs(r.diff):0;
-  // Convertir NaN a 0 en todos los campos de venta
   const _v = f => { const n=parseFloat(f); return isNaN(n)?0:n; };
-  // Sumar despachos múltiples por campo
-  const _d = (field) => {
-    const arr = (r.despachos||{})[field];
-    if(arr&&arr.length) return arr.reduce((s,x)=>s+(_v(x)),0);
-    return _v(r[field]);
-  };
-  r.v1m=_d('v1m'); r.v1t=_d('v1t');
-  r.v2m=_d('v2m'); r.v2t=_d('v2t');
-  r.v3m=_d('v3m'); r.v3t=_d('v3t');
-  r.v4m=_d('v4m'); r.v4t=_d('v4t');
-  r.armenia=_d('armenia'); r.xmayor=_d('xmayor');
-  r.totalVentas=r.v1m+r.v1t+r.v2m+r.v2t+r.v3m+r.v3t+r.v4m+r.v4t+r.armenia+r.xmayor;
+  r.v1m=_v(r.v1m); r.v1t=_v(r.v1t);
+  r.v2m=_v(r.v2m); r.v2t=_v(r.v2t);
+  r.v3m=_v(r.v3m); r.v3t=_v(r.v3t);
+  r.armenia=_v(r.armenia); r.xmayor=_v(r.xmayor);
+  r.totalVentas=r.v1m+r.v1t+r.v2m+r.v2t+r.v3m+r.v3t+r.armenia+r.xmayor;
   r.balance   =(r.diff!==null)?(r.totalVentas-r.saleVentas):null;
 }
 
@@ -755,10 +746,8 @@ async function loadAll(){
       v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
       v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
       v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
-      v4m:(p.v4m===0||p.v4m===null)?null:p.v4m, v4t:(p.v4t===0||p.v4t===null)?null:p.v4t,
       armenia:(p.armenia===0||p.armenia===null)?null:p.armenia,
       xmayor:(p.xmayor===0||p.xmayor===null)?null:p.xmayor,
-      despachos:p.despachos||{},
     }));
     hist  = hists.map(h=>({...h, snapshot:h.snapshot}));
     trash = trashItems.map(t=>({...t.data, _id:t.id, _when:t.deleted_at?.slice(11,16)||'', _date:t.deleted_at?.slice(0,10)||''}));
@@ -802,7 +791,7 @@ async function saveRow(r, field){
         id:r.id, name:r.name||'', orden:rows.indexOf(r),
         ant:r.ant, real:r.real, retorno:r.retorno, dev:r.dev, fin:r.fin,
         v1m:r.v1m, v1t:r.v1t, v2m:r.v2m, v2t:r.v2t,
-        v3m:r.v3m, v3t:r.v3t, v4m:r.v4m, v4t:r.v4t, armenia:r.armenia, xmayor:r.xmayor, despachos:r.despachos||{},
+        v3m:r.v3m, v3t:r.v3t, armenia:r.armenia, xmayor:r.xmayor,
         updated_at:new Date().toISOString()
       });
     }
@@ -820,7 +809,7 @@ async function saveAllOrders(){
     rows[i].orden=i;
   }
   try{
-    await sbUpsert('productos', rows.map((r,i)=>({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,v4m:r.v4m,v4t:r.v4t,armenia:r.armenia,xmayor:r.xmayor,despachos:r.despachos||{},updated_at:new Date().toISOString()})));
+    await sbUpsert('productos', rows.map((r,i)=>({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,armenia:r.armenia,xmayor:r.xmayor,updated_at:new Date().toISOString()})));
   } catch(e){ console.error(e); }
 }
 
@@ -946,11 +935,13 @@ function buildVenta(){
     const sp=document.createElement('span'); sp.id='vname-'+r.id; sp.style.fontWeight='500'; sp.textContent=r.name||'—';
     tdN.appendChild(sp); tr.appendChild(tdN);
     const tdS=document.createElement('td'); tdS.id='sale-'+r.id; renderSale(tdS,r); tr.appendChild(tdS);
-    [['v1m','v1t'],['v2m','v2t'],['v3m','v3t'],['v4m','v4t']].forEach(([m,t])=>{
-      tr.appendChild(mkDespacho(r,m)); tr.appendChild(mkDespacho(r,t));
+    // Autopista m/t, Boquia m/t, Tebaida m/t → v1m/v1t, v2m/v2t, v3m/v3t
+    [['v1m','v1t'],['v2m','v2t'],['v3m','v3t']].forEach(([m,t])=>{
+      tr.appendChild(mkNum(r,m)); tr.appendChild(mkNum(r,t));
     });
-    tr.appendChild(mkDespacho(r,'armenia'));
-    tr.appendChild(mkDespacho(r,'xmayor'));
+    // Valle → armenia | X Mayor → xmayor
+    tr.appendChild(mkNum(r,'armenia'));
+    tr.appendChild(mkNum(r,'xmayor'));
     const tdB=document.createElement('td'); tdB.id='bal-'+r.id; renderBalance(tdB,r.balance); tr.appendChild(tdB);
     document.getElementById('ventaBody').appendChild(tr);
   });
@@ -1099,7 +1090,7 @@ function updateBadge(){
 async function addRow(){
   if(!requestAdmin())return;
   const r={id:uid(),name:'',ant:null,real:null,retorno:null,dev:null,fin:null,
-    v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,v4m:null,v4t:null,armenia:null,xmayor:null,despachos:{},orden:rows.length};
+    v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,armenia:null,xmayor:null,orden:rows.length};
   rows.push(r);
   buildTables();
   await saveRow(r);
@@ -1229,7 +1220,7 @@ async function ejecutarCierre(encargado){
   rows.forEach(r=>{
     r.ant=r.fin!==null?r.fin:r.ant; // mantener anterior si no se llenó fin
     r.real=null;r.retorno=null;r.dev=null;r.fin=null;
-    r.v1m=null;r.v1t=null;r.v2m=null;r.v2t=null;r.v3m=null;r.v3t=null;r.v4m=null;r.v4t=null;r.armenia=null;r.xmayor=null;r.despachos={};
+    r.v1m=null;r.v1t=null;r.v2m=null;r.v2t=null;r.v3m=null;r.v3t=null;r.armenia=null;r.xmayor=null;
   });
   // Limpiar marcas de edición local
   rows.forEach(r=>{ r._localEdit=false; });
@@ -1248,8 +1239,8 @@ async function ejecutarCierre(encargado){
           dev:     null,
           fin:     null,
           v1m:null, v1t:null, v2m:null, v2t:null,
-          v3m:null, v3t:null, v4m:null, v4t:null,
-          armenia:null, xmayor:null, despachos:{},
+          v3m:null, v3t:null,
+          armenia:null, xmayor:null,
           updated_at: new Date().toISOString()
         })
       });
