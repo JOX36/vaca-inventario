@@ -711,6 +711,33 @@ function setSyncStatus(state, msg){
   if(state==='ok') setTimeout(()=>{ el.style.display='none'; },3000);
 }
 
+// Mapeo de campos internos JS → nombres reales de columnas en Supabase
+const COL = {
+  id:         'id',
+  name:       'nombre',
+  ant:        'hormiga',
+  real:       'real',
+  retorno:    'retorno',
+  dev:        'desarrollador',
+  fin:        'aleta',
+  v1m:        'v1m',
+  v1t:        'v1t',
+  v2m:        'v2m',
+  v2t:        'v2t',
+  v3m:        'v3m',
+  v3t:        'v3t',
+  armenia:    'valle',
+  xmayor:     'alcalde',
+  orden:      'orden',
+  updated_at: 'actualizado_en',
+};
+// Convierte objeto con campos JS a objeto con columnas Supabase
+function toSB(obj){
+  const out={};
+  for(const k in obj) out[COL[k]||k]=obj[k];
+  return out;
+}
+
 // ══ CALC ══
 function calcRow(r){
   r.disp      =(r.ant||0)+(r.real||0)+(r.retorno||0);
@@ -738,16 +765,18 @@ async function loadAll(){
     ]);
     rows  = prods.map(p=>({
       ...p,
-      // Tratar 0 como null para que los campos vacíos muestren — en vez de 0
-      real:    (p.real===0||p.real===null)    ? null : p.real,
-      retorno: (p.retorno===0||p.retorno===null) ? null : p.retorno,
-      dev:     (p.dev===0||p.dev===null)      ? null : p.dev,
-      fin:     (p.fin===0||p.fin===null)      ? null : p.fin,
+      id:      p.id,
+      name:    p.nombre||'',
+      ant:     (p.hormiga===0||p.hormiga===null)             ? null : p.hormiga,
+      real:    (p.real===0||p.real===null)                   ? null : p.real,
+      retorno: (p.retorno===0||p.retorno===null)             ? null : p.retorno,
+      dev:     (p.desarrollador===0||p.desarrollador===null) ? null : p.desarrollador,
+      fin:     (p.aleta===0||p.aleta===null)                 ? null : p.aleta,
       v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
       v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
       v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
-      armenia:(p.armenia===0||p.armenia===null)?null:p.armenia,
-      xmayor:(p.xmayor===0||p.xmayor===null)?null:p.xmayor,
+      armenia:(p.valle===0||p.valle===null)   ? null : p.valle,
+      xmayor: (p.alcalde===0||p.alcalde===null) ? null : p.alcalde,
     }));
     hist  = hists.map(h=>({...h, snapshot:h.snapshot}));
     trash = trashItems.map(t=>({...t.data, _id:t.id, _when:t.deleted_at?.slice(11,16)||'', _date:t.deleted_at?.slice(0,10)||''}));
@@ -778,25 +807,25 @@ async function saveRow(r, field){
   setSyncStatus('sync','⟳');
   try{
     if(field){
+      const colName = COL[field]||field;
       const resp=await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
-        body:JSON.stringify({[field]:r[field], updated_at:new Date().toISOString()})
+        body:JSON.stringify({[colName]:r[field], [COL.updated_at]:new Date().toISOString()})
       });
       if(!resp.ok){
         const txt=await resp.text();
-        alert('❌ Error guardando ['+field+']: '+resp.status+'\n'+txt);
+        alert('❌ Error guardando ['+field+'→'+colName+']: '+resp.status+'\n'+txt);
         throw new Error(txt);
       }
     } else {
-      // Guardar fila completa (al cerrar día, drag&drop, etc.)
-      await sbUpsert('productos',{
+      await sbUpsert('productos', toSB({
         id:r.id, name:r.name||'', orden:rows.indexOf(r),
         ant:r.ant, real:r.real, retorno:r.retorno, dev:r.dev, fin:r.fin,
         v1m:r.v1m, v1t:r.v1t, v2m:r.v2m, v2t:r.v2t,
         v3m:r.v3m, v3t:r.v3t, armenia:r.armenia, xmayor:r.xmayor,
         updated_at:new Date().toISOString()
-      });
+      }));
     }
     setSyncStatus('ok','✓ Guardado');
     r._localEdit=false;
@@ -812,7 +841,7 @@ async function saveAllOrders(){
     rows[i].orden=i;
   }
   try{
-    await sbUpsert('productos', rows.map((r,i)=>({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,armenia:r.armenia,xmayor:r.xmayor,updated_at:new Date().toISOString()})));
+    await sbUpsert('productos', rows.map((r,i)=>toSB({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,armenia:r.armenia,xmayor:r.xmayor,updated_at:new Date().toISOString()})));
   } catch(e){ console.error(e); }
 }
 
@@ -1235,7 +1264,7 @@ async function ejecutarCierre(encargado){
       const resp = await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
-        body:JSON.stringify({
+        body:JSON.stringify(toSB({
           ant:     r.ant,
           real:    null,
           retorno: null,
@@ -1245,7 +1274,7 @@ async function ejecutarCierre(encargado){
           v3m:null, v3t:null,
           armenia:null, xmayor:null,
           updated_at: new Date().toISOString()
-        })
+        }))
       });
       if(!resp.ok){
         const txt = await resp.text();
