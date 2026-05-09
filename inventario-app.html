@@ -778,13 +778,16 @@ async function saveRow(r, field){
   setSyncStatus('sync','⟳');
   try{
     if(field){
-      // PATCH solo el campo tocado — evita que dos usuarios se pisen
       const resp=await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
         body:JSON.stringify({[field]:r[field], updated_at:new Date().toISOString()})
       });
-      if(!resp.ok) throw new Error(await resp.text());
+      if(!resp.ok){
+        const txt=await resp.text();
+        alert('❌ Error guardando ['+field+']: '+resp.status+'\n'+txt);
+        throw new Error(txt);
+      }
     } else {
       // Guardar fila completa (al cerrar día, drag&drop, etc.)
       await sbUpsert('productos',{
