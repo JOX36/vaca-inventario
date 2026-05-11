@@ -713,18 +713,21 @@ function setSyncStatus(state, msg){
 
 // Mapeo de campos internos JS → nombres reales de columnas en Supabase
 const COL = {
-  id:         'id',
-  name:       'nombre',
-  ant:        'hormiga',
+  id:         'ID',
+  name:       'name',
+  ant:        'ant',
   real:       'real',
   retorno:    'retorno',
-  dev:        'desarrollador',
-  fin:        'aleta',
-  v1m:        'v1m', v1t:'v1t',
-  v2m:        'v2m', v2t:'v2t',
-  v3m:        'v3m', v3t:'v3t',
+  dev:        'dev',
+  fin:        'fin',
+  v1m:        'vlm',
+  v1t:        'vlt',
+  v2m:        'v2m',
+  v2t:        'v2t',
+  v3m:        'v3m',
+  v3t:        'v3t',
   armenia:    'valle',
-  xmayor:     'alcalde',
+  xmayor:     'mayor',
   orden:      'orden',
   updated_at: 'updated_at',
 };
@@ -756,23 +759,23 @@ async function loadAll(){
   try{
     const [prods, hists, trashItems] = await Promise.all([
       sbGet('productos','order=orden.asc,id.asc'),
-      sbGet('historial','order=created_at.desc&limit='+MAX_HIST),
+      sbGet('histórico','order=created_at.desc&limit='+MAX_HIST),
       sbGet('papelera','order=deleted_at.desc&limit=30')
     ]);
     rows  = prods.map(p=>({
       ...p,
-      id:      p.id,
-      name:    p.nombre||'',
-      ant:     (p.hormiga===0||p.hormiga===null)             ? null : p.hormiga,
-      real:    (p.real===0||p.real===null)                   ? null : p.real,
-      retorno: (p.retorno===0||p.retorno===null)             ? null : p.retorno,
-      dev:     (p.desarrollador===0||p.desarrollador===null) ? null : p.desarrollador,
-      fin:     (p.aleta===null)                 ? null : p.aleta,
-      v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
+      id:      p.ID,
+      name:    p.name||'',
+      ant:     (p.ant===0||p.ant===null)         ? null : p.ant,
+      real:    (p.real===0||p.real===null)       ? null : p.real,
+      retorno: (p.retorno===0||p.retorno===null) ? null : p.retorno,
+      dev:     (p.dev===0||p.dev===null)         ? null : p.dev,
+      fin:     p.fin===null                      ? null : p.fin,
+      v1m:(p.vlm===0||p.vlm===null)?null:p.vlm, v1t:(p.vlt===0||p.vlt===null)?null:p.vlt,
       v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
       v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
-      armenia:(p.valle===0||p.valle===null)   ? null : p.valle,
-      xmayor: (p.alcalde===0||p.alcalde===null) ? null : p.alcalde,
+      armenia:(p.valle===0||p.valle===null) ? null : p.valle,
+      xmayor: (p.mayor===0||p.mayor===null) ? null : p.mayor,
     }));
     hist  = hists.map(h=>({...h, snapshot:h.snapshot}));
     trash = trashItems.map(t=>({...t.data, _id:t.id, _when:t.deleted_at?.slice(11,16)||'', _date:t.deleted_at?.slice(0,10)||''}));
@@ -1237,7 +1240,7 @@ async function ejecutarCierre(encargado){
   const snap=rows.map(r=>({...r}));
   // guardar historial en Supabase
   try{
-    await sbInsert('historial',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,encargado:encargado.trim(),snapshot:snap});
+    await sbInsert('histórico',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,encargado:encargado.trim(),snapshot:snap});
     setSyncStatus('ok','✓ Día cerrado');
   }catch(e){
     console.error(e);
@@ -1285,7 +1288,7 @@ async function ejecutarCierre(encargado){
   buildTables();
   setSyncStatus('ok','✓ Todo guardado');
   // recargar historial
-  try{ const h=await sbGet('historial','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
+  try{ const h=await sbGet('histórico','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
   window._cerrando = false;
   alert('✅ Día cerrado a las '+timeStr+'.\nInventario final copiado como anterior de mañana.');
 }
@@ -1293,7 +1296,7 @@ async function ejecutarCierre(encargado){
 // ══ HISTORIAL ══
 async function openHist(){
   // recargar historial fresco
-  try{ hist=await sbGet('historial','order=created_at.desc&limit='+MAX_HIST); }catch(e){}
+  try{ hist=await sbGet('histórico','order=created_at.desc&limit='+MAX_HIST); }catch(e){}
   const ul=document.getElementById('histList'); ul.innerHTML='';
   if(!hist.length){ul.innerHTML='<li style="color:var(--gris4);font-style:italic;padding:10px 0;">No hay días cerrados aún.</li>';}
   else hist.forEach((h,i)=>{
@@ -1366,7 +1369,7 @@ async function eliminarHistorial(idx){
   const h=hist[idx];
   // Confirmación implícita — ya requiere requestAdmin()
   try{
-    await sbDelete('historial',{id:h.id});
+    await sbDelete('histórico',{id:h.id});
     hist.splice(idx,1);
     closeModal('histDetail');
     alert('✅ Registro eliminado del historial.');
@@ -1771,7 +1774,7 @@ async function buscarProduccion(){
 
   try{
     // Traer historial del rango de fechas
-    const data = await sbGet('historial',
+    const data = await sbGet('histórico',
       `fecha=gte.${desde}&fecha=lte.${hasta}&order=fecha.asc`
     );
 
