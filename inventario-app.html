@@ -713,15 +713,15 @@ function setSyncStatus(state, msg){
 
 // Mapeo de campos internos JS → nombres reales de columnas en Supabase
 const COL = {
-  id:         'ID',
+  id:         'id',
   name:       'name',
   ant:        'ant',
   real:       'real',
   retorno:    'retorno',
   dev:        'dev',
   fin:        'fin',
-  v1m:        'vlm',
-  v1t:        'vlt',
+  v1m:        'v1m',
+  v1t:        'v1t',
   v2m:        'v2m',
   v2t:        'v2t',
   v3m:        'v3m',
@@ -764,14 +764,14 @@ async function loadAll(){
     ]);
     rows  = prods.map(p=>({
       ...p,
-      id:      p.ID,
+      id:      p.id,
       name:    p.name||'',
       ant:     (p.ant===0||p.ant===null)         ? null : p.ant,
       real:    (p.real===0||p.real===null)       ? null : p.real,
       retorno: (p.retorno===0||p.retorno===null) ? null : p.retorno,
       dev:     (p.dev===0||p.dev===null)         ? null : p.dev,
       fin:     p.fin===null                      ? null : p.fin,
-      v1m:(p.vlm===0||p.vlm===null)?null:p.vlm, v1t:(p.vlt===0||p.vlt===null)?null:p.vlt,
+      v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
       v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
       v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
       armenia:(p.valle===0||p.valle===null) ? null : p.valle,
