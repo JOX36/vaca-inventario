@@ -454,11 +454,11 @@ tr.dragging{opacity:.4;}
         <tr class="head-main">
           <th class="left th-base" rowspan="2" style="min-width:130px">Producto</th>
           <th class="th-diff"  rowspan="2" style="min-width:55px">Sale a<br>Ventas</th>
-          <th class="th-punto col-sep" colspan="2">Vaca Autopista</th>
-          <th class="th-punto col-sep" colspan="2">Vaca Boquia</th>
-          <th class="th-punto col-sep" colspan="2">Vaca Tebaida</th>
+          <th class="th-punto col-sep" colspan="2">Autopista</th>
+          <th class="th-punto col-sep" colspan="2">Boquia</th>
+          <th class="th-punto col-sep" colspan="2">Tebaida</th>
           <th class="th-mayor col-sep" rowspan="2" style="min-width:58px;background:#2a1a3a!important">Valle</th>
-          <th class="th-mayor col-sep" rowspan="2" style="min-width:58px">Mayor</th>
+          <th class="th-mayor col-sep" rowspan="2" style="min-width:58px">X Mayor</th>
           <th class="th-bal   col-sep" rowspan="2" style="min-width:78px">Balance</th>
         </tr>
         <tr class="head-sub">
@@ -502,8 +502,8 @@ tr.dragging{opacity:.4;}
       <label class="caja-opt" onclick="selectCaja(this,'v2t')"><input type="radio" name="caja" value="v2t"><div><div class="caja-opt-label">🌙 Boquia Tarde</div><div class="caja-opt-sub">Vaca Boquia — Caja Tarde</div></div></label>
       <label class="caja-opt" onclick="selectCaja(this,'v3m')"><input type="radio" name="caja" value="v3m"><div><div class="caja-opt-label">☀ Tebaida Mañana</div><div class="caja-opt-sub">Vaca Tebaida — Caja Mañana</div></div></label>
       <label class="caja-opt" onclick="selectCaja(this,'v3t')"><input type="radio" name="caja" value="v3t"><div><div class="caja-opt-label">🌙 Tebaida Tarde</div><div class="caja-opt-sub">Vaca Tebaida — Caja Tarde</div></div></label>
-      <label class="caja-opt" onclick="selectCaja(this,'valle')"><input type="radio" name="caja" value="valle"><div><div class="caja-opt-label">🏚 Valle</div><div class="caja-opt-sub">Bodega alterna</div></div></label>
-      <label class="caja-opt" onclick="selectCaja(this,'mayor')"><input type="radio" name="caja" value="mayor"><div><div class="caja-opt-label">📦 Por Mayor</div><div class="caja-opt-sub">Ventas al por mayor</div></div></label>
+      <label class="caja-opt" onclick="selectCaja(this,'armenia')"><input type="radio" name="caja" value="armenia"><div><div class="caja-opt-label">🏚 Valle</div><div class="caja-opt-sub">Bodega alterna</div></div></label>
+      <label class="caja-opt" onclick="selectCaja(this,'xmayor')"><input type="radio" name="caja" value="xmayor"><div><div class="caja-opt-label">📦 Por Mayor</div><div class="caja-opt-sub">Ventas al por mayor</div></div></label>
     </div>
     <div class="cajero-field">
       <label>Nombre del cajero / responsable</label>
@@ -711,15 +711,41 @@ function setSyncStatus(state, msg){
   if(state==='ok') setTimeout(()=>{ el.style.display='none'; },3000);
 }
 
+// Mapeo de campos internos JS → nombres reales de columnas en Supabase
+const COL = {
+  id:         'id',
+  name:       'nombre',
+  ant:        'hormiga',
+  real:       'real',
+  retorno:    'retorno',
+  dev:        'desarrollador',
+  fin:        'aleta',
+  v1m:        'v1m', v1t:'v1t',
+  v2m:        'v2m', v2t:'v2t',
+  v3m:        'v3m', v3t:'v3t',
+  armenia:    'valle',
+  xmayor:     'alcalde',
+  orden:      'orden',
+  updated_at: 'updated_at',
+};
+function toSB(obj){
+  const out={};
+  for(const k in obj) out[COL[k]||k]=obj[k];
+  return out;
+}
+
 // ══ CALC ══
 function calcRow(r){
   r.disp      =(r.ant||0)+(r.real||0)+(r.retorno||0);
   r.dispReal  = r.disp-(r.dev||0);
   r.diff      =(r.fin!==null&&r.fin!==undefined&&r.fin!=='')?(r.fin-r.dispReal):null;
   r.saleVentas=(r.diff!==null&&r.diff<0)?Math.abs(r.diff):0;
-  // Convertir NaN a 0 en todos los campos de venta
   const _v = f => { const n=parseFloat(f); return isNaN(n)?0:n; };
-  r.totalVentas=_v(r.v1m)+_v(r.v1t)+_v(r.v2m)+_v(r.v2t)+_v(r.v3m)+_v(r.v3t)+_v(r.valle)+_v(r.mayor);
+  r.v1m=_v(r.v1m); r.v1t=_v(r.v1t);
+  r.v2m=_v(r.v2m); r.v2t=_v(r.v2t);
+  r.v3m=_v(r.v3m); r.v3t=_v(r.v3t);
+  r.armenia=_v(r.armenia); r.xmayor=_v(r.xmayor);
+  r.totalVentas=r.v1m+r.v1t+r.v2m+r.v2t+r.v3m+r.v3t+r.armenia+r.xmayor;
   r.balance   =(r.diff!==null)?(r.totalVentas-r.saleVentas):null;
 }
 
@@ -735,16 +761,18 @@ async function loadAll(){
     ]);
     rows  = prods.map(p=>({
       ...p,
-      // Tratar 0 como null para que los campos vacíos muestren — en vez de 0
-      real:    (p.real===0||p.real===null)    ? null : p.real,
-      retorno: (p.retorno===0||p.retorno===null) ? null : p.retorno,
-      dev:     (p.dev===0||p.dev===null)      ? null : p.dev,
-      fin:     (p.fin===0||p.fin===null)      ? null : p.fin,
+      id:      p.id,
+      name:    p.nombre||'',
+      ant:     (p.hormiga===0||p.hormiga===null)             ? null : p.hormiga,
+      real:    (p.real===0||p.real===null)                   ? null : p.real,
+      retorno: (p.retorno===0||p.retorno===null)             ? null : p.retorno,
+      dev:     (p.desarrollador===0||p.desarrollador===null) ? null : p.desarrollador,
+      fin:     (p.aleta===null)                 ? null : p.aleta,
       v1m:(p.v1m===0||p.v1m===null)?null:p.v1m, v1t:(p.v1t===0||p.v1t===null)?null:p.v1t,
       v2m:(p.v2m===0||p.v2m===null)?null:p.v2m, v2t:(p.v2t===0||p.v2t===null)?null:p.v2t,
       v3m:(p.v3m===0||p.v3m===null)?null:p.v3m, v3t:(p.v3t===0||p.v3t===null)?null:p.v3t,
-      valle:(p.valle===0||p.valle===null)?null:p.valle,
-      mayor:(p.mayor===0||p.mayor===null)?null:p.mayor,
+      armenia:(p.valle===0||p.valle===null)   ? null : p.valle,
+      xmayor: (p.alcalde===0||p.alcalde===null) ? null : p.alcalde,
     }));
     hist  = hists.map(h=>({...h, snapshot:h.snapshot}));
     trash = trashItems.map(t=>({...t.data, _id:t.id, _when:t.deleted_at?.slice(11,16)||'', _date:t.deleted_at?.slice(0,10)||''}));
@@ -775,22 +803,25 @@ async function saveRow(r, field){
   setSyncStatus('sync','⟳');
   try{
     if(field){
-      // PATCH solo el campo tocado — evita que dos usuarios se pisen
+      const colName = COL[field]||field;
       const resp=await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
-        body:JSON.stringify({[field]:r[field], updated_at:new Date().toISOString()})
+        body:JSON.stringify({[colName]:r[field], updated_at:new Date().toISOString()})
       });
-      if(!resp.ok) throw new Error(await resp.text());
+      if(!resp.ok){
+        const txt=await resp.text();
+        alert('❌ Error guardando ['+field+'→'+colName+']: '+resp.status+'\n'+txt);
+        throw new Error(txt);
+      }
     } else {
-      // Guardar fila completa (al cerrar día, drag&drop, etc.)
-      await sbUpsert('productos',{
+      await sbUpsert('productos', toSB({
         id:r.id, name:r.name||'', orden:rows.indexOf(r),
         ant:r.ant, real:r.real, retorno:r.retorno, dev:r.dev, fin:r.fin,
         v1m:r.v1m, v1t:r.v1t, v2m:r.v2m, v2t:r.v2t,
-        v3m:r.v3m, v3t:r.v3t, valle:r.valle, mayor:r.mayor,
+        v3m:r.v3m, v3t:r.v3t, armenia:r.armenia, xmayor:r.xmayor,
         updated_at:new Date().toISOString()
-      });
+      }));
     }
     setSyncStatus('ok','✓ Guardado');
     r._localEdit=false;
@@ -806,7 +837,7 @@ async function saveAllOrders(){
     rows[i].orden=i;
   }
   try{
-    await sbUpsert('productos', rows.map((r,i)=>({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,valle:r.valle,mayor:r.mayor,updated_at:new Date().toISOString()})));
+    await sbUpsert('productos', rows.map((r,i)=>toSB({id:r.id,orden:i,name:r.name||'',ant:r.ant,real:r.real,retorno:r.retorno,dev:r.dev,fin:r.fin,v1m:r.v1m,v1t:r.v1t,v2m:r.v2m,v2t:r.v2t,v3m:r.v3m,v3t:r.v3t,armenia:r.armenia,xmayor:r.xmayor,updated_at:new Date().toISOString()})));
   } catch(e){ console.error(e); }
 }
 
@@ -932,9 +963,13 @@ function buildVenta(){
     const sp=document.createElement('span'); sp.id='vname-'+r.id; sp.style.fontWeight='500'; sp.textContent=r.name||'—';
     tdN.appendChild(sp); tr.appendChild(tdN);
     const tdS=document.createElement('td'); tdS.id='sale-'+r.id; renderSale(tdS,r); tr.appendChild(tdS);
-    [['v1m','v1t'],['v2m','v2t'],['v3m','v3t']].forEach(([m,t])=>{tr.appendChild(mkNum(r,m));tr.appendChild(mkNum(r,t));});
-    tr.appendChild(mkNum(r,'valle'));
-    tr.appendChild(mkNum(r,'mayor'));
+    // Autopista m/t, Boquia m/t, Tebaida m/t → v1m/v1t, v2m/v2t, v3m/v3t
+    [['v1m','v1t'],['v2m','v2t'],['v3m','v3t']].forEach(([m,t])=>{
+      tr.appendChild(mkNum(r,m)); tr.appendChild(mkNum(r,t));
+    });
+    // Valle → armenia | X Mayor → xmayor
+    tr.appendChild(mkNum(r,'armenia'));
+    tr.appendChild(mkNum(r,'xmayor'));
     const tdB=document.createElement('td'); tdB.id='bal-'+r.id; renderBalance(tdB,r.balance); tr.appendChild(tdB);
     document.getElementById('ventaBody').appendChild(tr);
   });
@@ -990,6 +1025,8 @@ function refreshRow(r){
   const sEl=document.getElementById('sale-'+r.id); if(sEl)renderSale(sEl,r);
   const dEl=document.getElementById('diff-'+r.id); if(dEl)renderDiff(dEl,r.diff);
   const bEl=document.getElementById('bal-'+r.id);  if(bEl)renderBalance(bEl,r.balance);
+  // Actualizar nombre en tabla ventas
+  const vn=document.getElementById('vname-'+r.id); if(vn)vn.textContent=r.name||'';
 }
 
 function renderSale(el,r){
@@ -1081,7 +1118,7 @@ function updateBadge(){
 async function addRow(){
   if(!requestAdmin())return;
   const r={id:uid(),name:'',ant:null,real:null,retorno:null,dev:null,fin:null,
-    v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,valle:null,mayor:null,orden:rows.length};
+    v1m:null,v1t:null,v2m:null,v2t:null,v3m:null,v3t:null,armenia:null,xmayor:null,orden:rows.length};
   rows.push(r);
   buildTables();
   await saveRow(r);
@@ -1155,7 +1192,7 @@ async function cerrarDia(){
   rows.forEach(calcRow);
   if(!rows.some(r=>r.fin!==null)){alert('No hay Inventario Final registrado.');return;}
   // Bloquear si hay productos con inventario anterior > 0 sin inventario final
-  const sinFinal = rows.filter(r=>(r.ant||0)>0 && r.fin===null);
+  const sinFinal = rows.filter(r=>((r.ant||0)>0 || (r.real||0)>0) && r.fin===null);
   if(sinFinal.length>0){
     const lista = sinFinal.map(r=>'   ⚠️ '+r.name+' — tiene '+r.ant+' en anterior sin Inv.Final').join('\n');
     alert(
@@ -1211,7 +1248,7 @@ async function ejecutarCierre(encargado){
   rows.forEach(r=>{
     r.ant=r.fin!==null?r.fin:r.ant; // mantener anterior si no se llenó fin
     r.real=null;r.retorno=null;r.dev=null;r.fin=null;
-    r.v1m=null;r.v1t=null;r.v2m=null;r.v2t=null;r.v3m=null;r.v3t=null;r.valle=null;r.mayor=null;
+    r.v1m=null;r.v1t=null;r.v2m=null;r.v2t=null;r.v3m=null;r.v3t=null;r.armenia=null;r.xmayor=null;
   });
   // Limpiar marcas de edición local
   rows.forEach(r=>{ r._localEdit=false; });
@@ -1223,16 +1260,17 @@ async function ejecutarCierre(encargado){
       const resp = await fetch(SB_URL+'/rest/v1/productos?id=eq.'+r.id,{
         method:'PATCH',
         headers:{...HEADS,'Prefer':'return=minimal'},
-        body:JSON.stringify({
+        body:JSON.stringify(toSB({
           ant:     r.ant,
           real:    null,
           retorno: null,
           dev:     null,
           fin:     null,
           v1m:null, v1t:null, v2m:null, v2t:null,
-          v3m:null, v3t:null, valle:null, mayor:null,
+          v3m:null, v3t:null,
+          armenia:null, xmayor:null,
           updated_at: new Date().toISOString()
-        })
+        }))
       });
       if(!resp.ok){
         const txt = await resp.text();
@@ -1307,7 +1345,7 @@ function buildHistHTML(h){
   <table class="pt"><thead><tr>
     <th class="left" rowspan="2">Producto</th><th rowspan="2">Sale</th>
     <th colspan="2">Autopista</th><th colspan="2">Boquia</th><th colspan="2">Tebaida</th>
-    <th rowspan="2">Valle</th><th rowspan="2">Mayor</th><th rowspan="2">Total</th><th rowspan="2">Balance</th>
+    <th rowspan="2">Armenia</th><th rowspan="2">X Mayor</th><th rowspan="2">Total</th><th rowspan="2">Balance</th>
   </tr><tr><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th></tr>
   </thead><tbody>`;
   snap.forEach(r=>{
@@ -1316,8 +1354,8 @@ function buildHistHTML(h){
     const bc=r.balance===null||r.balance===0?'var(--verde)':r.balance<0?'var(--rojo)':'#7a4a00';
     hv+=`<tr><td class="left">${escH(r.name)}</td><td style="font-weight:700;color:var(--rojo)">${sale}</td>
       <td>${r.v1m??'—'}</td><td>${r.v1t??'—'}</td><td>${r.v2m??'—'}</td><td>${r.v2t??'—'}</td>
-      <td>${r.v3m??'—'}</td><td>${r.v3t??'—'}</td><td>${r.valle??'—'}</td>
-      <td>${r.mayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
+      <td>${r.v3m??'—'}</td><td>${r.v3t??'—'}</td><td>${r.armenia??'—'}</td>
+      <td>${r.xmayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
       <td style="font-weight:700;color:${bc}">${bt}</td></tr>`;
   });
   hv+=`</tbody></table>`;
@@ -1362,7 +1400,7 @@ function printHist(){
       +'<td>'+(r.v1m??'&mdash;')+'</td><td>'+(r.v1t??'&mdash;')+'</td>'
       +'<td>'+(r.v2m??'&mdash;')+'</td><td>'+(r.v2t??'&mdash;')+'</td>'
       +'<td>'+(r.v3m??'&mdash;')+'</td><td>'+(r.v3t??'&mdash;')+'</td>'
-      +'<td>'+(r.valle??'&mdash;')+'</td><td>'+(r.mayor??'&mdash;')+'</td>'
+      +'<td>'+(r.armenia??'&mdash;')+'</td><td>'+(r.xmayor??'&mdash;')+'</td>'
       +'<td><b>'+(r.totalVentas||0)+'</b></td>'
       +'<td style="font-weight:700;color:'+bc+'">'+bt+'</td></tr>';
   });
@@ -1406,13 +1444,28 @@ function imprimirCaja(){
 
   var filas = '';
   prods.forEach(function(r,i){
+    const arr = (r.despachos||{})[_cajaField];
+    var cantStr = '';
+    var cant = 0;
+    if(arr && arr.length > 1){
+      const vals = arr.filter(function(v){return v!==null&&v!==undefined;});
+      cant = vals.reduce(function(s,v){return s+(parseFloat(v)||0);},0);
+      cantStr = vals.join(' + ') + ' <b>= '+cant+'</b>';
+    } else {
+      cant = parseFloat(r[_cajaField])||0;
+      cantStr = '<b>'+cant+'</b>';
+    }
     filas += '<tr>'
       + '<td>'+(i+1)+'</td>'
       + '<td style="text-align:left;font-weight:500">'+escH(r.name)+'</td>'
-      + '<td style="font-weight:700">'+((r[_cajaField]||0))+'</td>'
+      + '<td style="font-weight:700;white-space:nowrap;">'+cantStr+'</td>'
       + '</tr>';
   });
-  var total = prods.reduce(function(s,r){return s+(r[_cajaField]||0);},0);
+  var total = prods.reduce(function(s,r){
+    const arr=(r.despachos||{})[_cajaField];
+    if(arr&&arr.length) return s+arr.reduce(function(a,v){return a+(parseFloat(v)||0);},0);
+    return s+(parseFloat(r[_cajaField])||0);
+  },0);
   _cajaFromHist = null; // limpiar después de usar
   var cajeroBox = cajero
     ? '<div style="background:#f5ece0;border-left:3px solid #7c4a1e;padding:5px 10px;margin-bottom:10px;font-size:8.5pt;">&#128100; <b>Cajero/Responsable:</b> '+escH(cajero)+'</div>'
@@ -1515,7 +1568,7 @@ function buildConsolidadoHTML(){
   <table class="pt"><thead><tr>
     <th class="left" rowspan="2">Producto</th><th rowspan="2">Sale</th>
     <th colspan="2">Autopista</th><th colspan="2">Boquia</th><th colspan="2">Tebaida</th>
-    <th rowspan="2">Valle</th><th rowspan="2">Mayor</th><th rowspan="2">Total</th><th rowspan="2">Balance</th>
+    <th rowspan="2">Armenia</th><th rowspan="2">X Mayor</th><th rowspan="2">Total</th><th rowspan="2">Balance</th>
   </tr><tr><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th><th>Mañ.</th><th>Tarde</th></tr>
   </thead><tbody>`;
   rows.filter(r=>r.saleVentas>0||r.totalVentas>0).forEach(r=>{
@@ -1525,8 +1578,8 @@ function buildConsolidadoHTML(){
     hv+=`<tr><td class="left">${escH(r.name)||'Sin nombre'}</td>
       <td style="font-weight:700;color:var(--rojo)">${sale}</td>
       <td>${r.v1m??'—'}</td><td>${r.v1t??'—'}</td><td>${r.v2m??'—'}</td><td>${r.v2t??'—'}</td>
-      <td>${r.v3m??'—'}</td><td>${r.v3t??'—'}</td><td>${r.valle??'—'}</td>
-      <td>${r.mayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
+      <td>${r.v3m??'—'}</td><td>${r.v3t??'—'}</td><td>${r.armenia??'—'}</td>
+      <td>${r.xmayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
       <td style="font-weight:700;color:${bc}">${bt}</td></tr>`;
   });
   hv+=`</tbody></table>`;
@@ -1547,7 +1600,7 @@ function buildPrintDoc(dt, hp, hv){
       + '<table><thead>'
       + '<tr><th class="left" rowspan="2">Producto</th><th rowspan="2">Sale</th>'
       + '<th colspan="2">Autopista</th><th colspan="2">Boquia</th><th colspan="2">Tebaida</th>'
-      + '<th rowspan="2">Valle</th><th rowspan="2">Mayor</th>'
+      + '<th rowspan="2">Armenia</th><th rowspan="2">X Mayor</th>'
       + '<th rowspan="2">Total</th><th rowspan="2">Balance</th></tr>'
       + '<tr><th>Ma&ntilde;.</th><th>Tarde</th><th>Ma&ntilde;.</th><th>Tarde</th><th>Ma&ntilde;.</th><th>Tarde</th></tr>'
       + '</thead><tbody>'+hv+'</tbody></table></div>';
@@ -1626,8 +1679,8 @@ function getConsolidadoData(){
     hv+=`<tr><td class="left">${escH(r.name)||'—'}</td>
       <td style="${ss}">${sale}</td>
       <td>${r.v1m??'—'}</td><td>${r.v1t??'—'}</td><td>${r.v2m??'—'}</td><td>${r.v2t??'—'}</td>
-      <td>${r.v3m??'—'}</td><td>${r.v3t??'—'}</td><td>${r.valle??'—'}</td>
-      <td>${r.mayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
+      <td>${r.v3m??'—'}</td><td>${r.v3t??'—'}</td><td>${r.armenia??'—'}</td>
+      <td>${r.xmayor??'—'}</td><td><b>${r.totalVentas||0}</b></td>
       <td style="font-weight:700;color:${bc}">${bt}</td></tr>`;
   });
   return {dt, hp, hv};
@@ -1978,6 +2031,155 @@ function abrirEditarEncargado(idx){
     }
   };
   document.getElementById('editEncargadoOverlay').classList.add('open');
+}
+
+
+// ══ DESPACHOS MÚLTIPLES ══
+function mkDespacho(r, field){
+  const td = document.createElement('td');
+  td.style.cssText = 'padding:2px 3px;vertical-align:top;min-width:54px;';
+  td.id = 'desp-'+r.id+'-'+field;
+  renderDespacho(td, r, field);
+  return td;
+}
+
+function renderDespacho(td, r, field){
+  td.innerHTML = '';
+  if(!r.despachos) r.despachos = {};
+  const arr = r.despachos[field] || [];
+
+  // Si no hay despachos, mostrar campo simple
+  if(arr.length === 0){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:2px;';
+    const inp = mkInpDespacho(r, field, null); // null = campo directo
+    const btnAdd = document.createElement('button');
+    btnAdd.textContent = '+';
+    btnAdd.title = 'Agregar otro despacho';
+    btnAdd.style.cssText = 'background:var(--verde);color:white;border:none;border-radius:3px;width:16px;height:16px;font-size:9px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;';
+    btnAdd.addEventListener('click', function(e){
+      e.stopPropagation();
+      // Convertir a modo despachos múltiples
+      const val = r[field];
+      r.despachos[field] = val!==null ? [val] : [null];
+      r[field] = null;
+      renderDespacho(td, r, field);
+    });
+    wrap.appendChild(inp);
+    wrap.appendChild(btnAdd);
+    td.appendChild(wrap);
+    return;
+  }
+
+  // Modo múltiples despachos
+  arr.forEach((val, i) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:2px;margin-bottom:2px;';
+
+    const inp = mkInpDespacho(r, field, i);
+    wrap.appendChild(inp);
+
+    // Botón quitar fila (solo si hay más de una)
+    if(arr.length > 1){
+      const btnDel = document.createElement('button');
+      btnDel.textContent = '×';
+      btnDel.style.cssText = 'background:var(--rojo);color:white;border:none;border-radius:3px;width:14px;height:14px;font-size:9px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;';
+      btnDel.addEventListener('click', function(e){
+        e.stopPropagation();
+        r.despachos[field].splice(i, 1);
+        if(r.despachos[field].length === 0) delete r.despachos[field];
+        calcRow(r); refreshRow(r);
+        renderDespacho(td, r, field);
+        saveRow(r, 'despachos');
+      });
+      wrap.appendChild(btnDel);
+    }
+    td.appendChild(wrap);
+  });
+
+  // Botón agregar nueva fila
+  const btnAdd = document.createElement('button');
+  btnAdd.textContent = '+ despacho';
+  btnAdd.style.cssText = 'background:var(--verde);color:white;border:none;border-radius:3px;padding:1px 4px;font-size:8px;cursor:pointer;margin-top:1px;width:100%;';
+  btnAdd.addEventListener('click', function(e){
+    e.stopPropagation();
+    r.despachos[field].push(null);
+    renderDespacho(td, r, field);
+  });
+  td.appendChild(btnAdd);
+
+  // Total si hay más de 1
+  if(arr.filter(v=>v!==null).length > 1){
+    const tot = document.createElement('div');
+    const sum = arr.reduce((s,v)=>s+(parseFloat(v)||0), 0);
+    tot.style.cssText = 'font-size:7.5px;color:var(--madera);font-weight:700;text-align:right;border-top:1px solid var(--gris2);margin-top:2px;padding-top:1px;';
+    tot.textContent = '= '+sum;
+    td.appendChild(tot);
+  }
+}
+
+function mkInpDespacho(r, field, idx){
+  const inp = document.createElement('input');
+  inp.type = 'number';
+  inp.inputMode = 'decimal';
+  inp.step = '0.5';
+  inp.min = '0';
+  inp.placeholder = '—';
+  inp.style.cssText = 'width:44px;padding:2px 3px;border:1.5px solid var(--gris2);border-radius:3px;font-size:.75rem;text-align:center;background:var(--gris1);color:var(--texto);-moz-appearance:textfield;';
+
+  // Valor inicial
+  if(idx === null){
+    inp.value = (r[field]!==null&&r[field]!==undefined) ? r[field] : '';
+  } else {
+    const v = (r.despachos[field]||[])[idx];
+    inp.value = (v!==null&&v!==undefined) ? v : '';
+  }
+
+  inp.addEventListener('focus', function(){ this.select(); r._localEdit=true; });
+
+  inp.addEventListener('input', function(){
+    const num = parseFloat(this.value);
+    if(idx === null){
+      r[field] = isNaN(num) ? null : num;
+    } else {
+      if(!r.despachos[field]) r.despachos[field] = [];
+      r.despachos[field][idx] = isNaN(num) ? null : num;
+    }
+    r._localEdit = true;
+    calcRow(r); refreshRow(r);
+    // Actualizar total si hay múltiples
+    const td = document.getElementById('desp-'+r.id+'-'+field);
+    if(td){
+      const totEl = td.querySelector('div:last-child');
+      if(totEl && totEl.style.borderTop){
+        const arr = r.despachos[field]||[];
+        const sum = arr.reduce((s,v)=>s+(parseFloat(v)||0),0);
+        totEl.textContent = '= '+sum;
+      }
+    }
+  });
+
+  inp.addEventListener('blur', function(){
+    const num = parseFloat(this.value);
+    if(idx === null){
+      r[field] = isNaN(num) ? null : num;
+      this.value = isNaN(num) ? '' : num;
+      calcRow(r); refreshRow(r);
+      clearTimeout(_debTimers[r.id]);
+      _debTimers[r.id] = null;
+      saveRow(r, field); // ← campo directo (v1m, v2m, etc.)
+    } else {
+      if(!r.despachos[field]) r.despachos[field] = [];
+      r.despachos[field][idx] = isNaN(num) ? null : num;
+      calcRow(r); refreshRow(r);
+      clearTimeout(_debTimers[r.id]);
+      _debTimers[r.id] = null;
+      saveRow(r, 'despachos');
+    }
+    setTimeout(()=>{ r._localEdit=false; }, 800);
+  });
+
+  return inp;
 }
 
 // ══ INIT ══
