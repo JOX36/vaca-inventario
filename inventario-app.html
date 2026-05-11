@@ -759,7 +759,7 @@ async function loadAll(){
   try{
     const [prods, hists, trashItems] = await Promise.all([
       sbGet('productos','order=orden.asc,id.asc'),
-      sbGet('histórico','order=created_at.desc&limit='+MAX_HIST),
+      sbGet('historial','order=created_at.desc&limit='+MAX_HIST),
       sbGet('papelera','order=deleted_at.desc&limit=30')
     ]);
     rows  = prods.map(p=>({
@@ -1240,7 +1240,7 @@ async function ejecutarCierre(encargado){
   const snap=rows.map(r=>({...r}));
   // guardar historial en Supabase
   try{
-    await sbInsert('histórico',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,encargado:encargado.trim(),snapshot:snap});
+    await sbInsert('historial',{fecha:now.toISOString().slice(0,10),label,hora:timeStr,encargado:encargado.trim(),snapshot:snap});
     setSyncStatus('ok','✓ Día cerrado');
   }catch(e){
     console.error(e);
@@ -1288,7 +1288,7 @@ async function ejecutarCierre(encargado){
   buildTables();
   setSyncStatus('ok','✓ Todo guardado');
   // recargar historial
-  try{ const h=await sbGet('histórico','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
+  try{ const h=await sbGet('historial','order=created_at.desc&limit='+MAX_HIST); hist=h; }catch(e){}
   window._cerrando = false;
   alert('✅ Día cerrado a las '+timeStr+'.\nInventario final copiado como anterior de mañana.');
 }
@@ -1296,7 +1296,7 @@ async function ejecutarCierre(encargado){
 // ══ HISTORIAL ══
 async function openHist(){
   // recargar historial fresco
-  try{ hist=await sbGet('histórico','order=created_at.desc&limit='+MAX_HIST); }catch(e){}
+  try{ hist=await sbGet('historial','order=created_at.desc&limit='+MAX_HIST); }catch(e){}
   const ul=document.getElementById('histList'); ul.innerHTML='';
   if(!hist.length){ul.innerHTML='<li style="color:var(--gris4);font-style:italic;padding:10px 0;">No hay días cerrados aún.</li>';}
   else hist.forEach((h,i)=>{
@@ -1369,7 +1369,7 @@ async function eliminarHistorial(idx){
   const h=hist[idx];
   // Confirmación implícita — ya requiere requestAdmin()
   try{
-    await sbDelete('histórico',{id:h.id});
+    await sbDelete('historial',{id:h.id});
     hist.splice(idx,1);
     closeModal('histDetail');
     alert('✅ Registro eliminado del historial.');
@@ -1774,7 +1774,7 @@ async function buscarProduccion(){
 
   try{
     // Traer historial del rango de fechas
-    const data = await sbGet('histórico',
+    const data = await sbGet('historial',
       `fecha=gte.${desde}&fecha=lte.${hasta}&order=fecha.asc`
     );
 
