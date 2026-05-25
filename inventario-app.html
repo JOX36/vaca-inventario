@@ -1447,17 +1447,9 @@ function imprimirCaja(){
 
   var filas = '';
   prods.forEach(function(r,i){
-    const arr = (r.despachos||{})[_cajaField];
-    var cantStr = '';
-    var cant = 0;
-    if(arr && arr.length > 1){
-      const vals = arr.filter(function(v){return v!==null&&v!==undefined;});
-      cant = vals.reduce(function(s,v){return s+(parseFloat(v)||0);},0);
-      cantStr = vals.join(' + ') + ' <b>= '+cant+'</b>';
-    } else {
-      cant = parseFloat(r[_cajaField])||0;
-      cantStr = '<b>'+cant+'</b>';
-    }
+    // Inventario principal: siempre usar el valor directo del campo (no despachos)
+    var cant = parseFloat(r[_cajaField])||0;
+    var cantStr = '<b>'+cant+'</b>';
     filas += '<tr>'
       + '<td>'+(i+1)+'</td>'
       + '<td style="text-align:left;font-weight:500">'+escH(r.name)+'</td>'
@@ -1465,8 +1457,6 @@ function imprimirCaja(){
       + '</tr>';
   });
   var total = prods.reduce(function(s,r){
-    const arr=(r.despachos||{})[_cajaField];
-    if(arr&&arr.length) return s+arr.reduce(function(a,v){return a+(parseFloat(v)||0);},0);
     return s+(parseFloat(r[_cajaField])||0);
   },0);
   _cajaFromHist = null; // limpiar después de usar
