@@ -510,7 +510,8 @@ tr.dragging{opacity:.4;}
       <input type="text" id="cajeroNombre" placeholder="Ej: María González">
     </div>
     <div class="modal-actions">
-      <button class="btn btn-print" onclick="imprimirCaja()">🖨 Imprimir</button>
+      <button class="btn btn-print" onclick="imprimirCaja()">🖨 Inventario</button>
+      <button class="btn" style="background:#3a1a00;color:#ffcc80;border:1.5px solid #c8a060;" onclick="imprimirPedido()">📋 Pedido</button>
       <button class="btn btn-ghost" onclick="closeModal('cajaOverlay')">Cancelar</button>
     </div>
   </div>
@@ -996,6 +997,7 @@ function mkNum(r,field){
   inp.min='0';
   inp.placeholder='—';
   inp.style.textAlign='center';
+  inp._field=field; // marca para identificar el campo desde imprimirCaja
   inp.value=(r[field]!==null&&r[field]!==undefined&&r[field]!=='')?r[field]:'';
   inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
   inp.addEventListener('input',function(){
@@ -1420,7 +1422,7 @@ const CAJAS={
   v1m:{nombre:'Vaca Autopista',turno:'Caja Mañana'},v1t:{nombre:'Vaca Autopista',turno:'Caja Tarde'},
   v2m:{nombre:'Vaca Boquia',turno:'Caja Mañana'},  v2t:{nombre:'Vaca Boquia',turno:'Caja Tarde'},
   v3m:{nombre:'Vaca Tebaida',turno:'Caja Mañana'}, v3t:{nombre:'Vaca Tebaida',turno:'Caja Tarde'},
-  valle:{nombre:'Valle',turno:'Bodega Alterna'},    mayor:{nombre:'Por Mayor',turno:'Pedidos'}
+  armenia:{nombre:'Valle',turno:'Bodega Alterna'},  xmayor:{nombre:'Por Mayor',turno:'Pedidos'}
 };
 function selectCaja(el,field){
   document.querySelectorAll('.caja-opt').forEach(o=>o.classList.remove('selected'));
@@ -1436,14 +1438,28 @@ function imprimirCaja(){
   if(!_cajaField){alert('Selecciona una caja primero.');return;}
   // Usar snapshot del historial si viene desde historial
   const sourceRows = _cajaFromHist || rows;
-  if(!_cajaFromHist) sourceRows.forEach(calcRow);
   const caja    = CAJAS[_cajaField];
   const cajero  = document.getElementById('cajeroNombre').value.trim();
   const now     = new Date();
   const fecha   = now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const hora    = now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  const prods   = sourceRows.filter(r=>r[_cajaField]!==null && r[_cajaField]!==undefined && r[_cajaField]!=='' && parseFloat(r[_cajaField])>0);
-  if(!prods.length){alert('No hay productos registrados para esa caja.');return;}
+  // 1. Primero sincronizar DOM → memoria (ANTES de calcRow)
+  if(!_cajaFromHist){
+    document.querySelectorAll('#ventaBody tr').forEach(function(tr){
+      var id=parseInt(tr.dataset.id); if(!id) return;
+      var row=sourceRows.find(function(r){return r.id===id;}); if(!row) return;
+      tr.querySelectorAll('input').forEach(function(inp){
+        if(inp._field===_cajaField){
+          var v=parseFloat(inp.value);
+          row[_cajaField]=isNaN(v)?null:v;
+        }
+      });
+    });
+    // 2. Ahora calcRow con valores actualizados
+    sourceRows.forEach(calcRow);
+  }
+  const prods = sourceRows.filter(r=>parseFloat(r[_cajaField])>0);
+  if(!prods.length){alert('No hay valores en la columna seleccionada.\nVerifica que los datos estén guardados.');return;}
 
   var filas = '';
   prods.forEach(function(r,i){
@@ -1529,6 +1545,174 @@ function imprimirCaja(){
       w.document.body.appendChild(div);
     }catch(e){}
   },400);
+  closeModal('cajaOverlay');
+}
+
+function imprimirPedido(){
+  if(!_cajaField){alert('Selecciona una caja primero.');return;}
+  const sourceRows = _cajaFromHist || rows;
+  if(!_cajaFromHist) sourceRows.forEach(calcRow);
+  const caja    = CAJAS[_cajaField];
+  const cajero  = document.getElementById('cajeroNombre').value.trim();
+  const now     = new Date();
+  const fecha   = now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const hora    = now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+
+  // Productos con inv_final (lo que quedó) — base del pedido
+  const prods = sourceRows.filter(r=>r[_cajaField]!==null && r[_cajaField]!==undefined && r[_cajaField]!=='' && parseFloat(r[_cajaField])>0);
+  if(!prods.length){alert('No hay productos para esta caja.');return;}
+
+  var totalPedido = prods.reduce(function(s,r){return s+(parseFloat(r[_cajaField])||0);},0);
+
+  // Logo base64 (extraído del sistema)
+  var LOGO_B64 = document.querySelector('#loginScreen img, .logo-mark img, header img')?.src || '';
+
+  // Filas tabla
+  var filas='';
+  prods.forEach(function(r,i){
+    var pedido = parseFloat(r[_cajaField])||0;
+    var invFin = (r.fin!==null&&r.fin!==undefined&&r.fin!=='') ? parseFloat(r.fin)||0 : '—';
+    filas += '<tr>'
+      +'<td style="text-align:center;color:#6b4a1e;font-weight:700;font-size:9pt;">'+( i+1)+'</td>'
+      +'<td style="text-align:left;font-weight:600;font-size:9pt;color:#2c1a08;">'+escH(r.name)+'</td>'
+      +'<td style="text-align:center;font-weight:700;font-size:10pt;color:#7c4a1e;">'+invFin+'</td>'
+      +'<td style="text-align:center;font-weight:800;font-size:10pt;color:#1a4a1a;">'+pedido+'</td>'
+      +'<td style="text-align:center;"><div style="width:52px;height:24px;border:1.5px solid #b08040;border-radius:4px;display:inline-block;background:#fffdf5;"></div></td>'
+      +'</tr>';
+  });
+
+  var watermarkStyle = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);font-size:88pt;font-weight:900;opacity:.045;pointer-events:none;letter-spacing:4px;font-family:Georgia,serif;white-space:nowrap;z-index:0;color:#7c4a1e;';
+
+  var htmlCopia = function(tipo){
+    var wColor = tipo==='PRODUCCIÓN'?'#0a2a0a':'#0a0a2a';
+    var wBg    = tipo==='PRODUCCIÓN'?'#e8f5e9':'#e8eaf6';
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Pedido ${caja.nombre} — ${caja.turno}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#fff;color:#2c1a08;position:relative;}
+  .watermark{${watermarkStyle}color:${wColor};}
+  .page{width:100%;max-width:680px;margin:0 auto;padding:18px 22px 12px;}
+  /* ENCABEZADO */
+  .header{display:flex;align-items:center;gap:14px;border-bottom:3px solid #7c4a1e;padding-bottom:12px;margin-bottom:14px;}
+  .logo{width:68px;height:68px;object-fit:cover;border-radius:50%;border:3px solid #c8a060;box-shadow:0 2px 8px rgba(124,74,30,.25);}
+  .header-info{flex:1;}
+  .brand{font-size:18pt;font-weight:900;color:#7c4a1e;letter-spacing:.5px;line-height:1.1;}
+  .brand-sub{font-size:8pt;color:#a07040;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-top:1px;}
+  .doc-info{text-align:right;}
+  .doc-title{font-size:13pt;font-weight:800;color:#3a1a00;letter-spacing:.3px;}
+  .doc-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:7.5pt;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;background:${wBg};color:${wColor};border:1.5px solid ${wColor};margin-top:3px;}
+  /* DATOS */
+  .datos{display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;background:#fdf6ec;border:1px solid #e8d0a0;border-radius:8px;padding:8px 12px;margin-bottom:14px;font-size:8pt;}
+  .dato{display:flex;gap:5px;align-items:center;}
+  .dato-label{color:#a07040;font-weight:700;text-transform:uppercase;letter-spacing:.5px;min-width:60px;}
+  .dato-val{color:#2c1a08;font-weight:600;}
+  /* TABLA */
+  table{width:100%;border-collapse:collapse;font-size:8.5pt;}
+  thead tr{background:linear-gradient(135deg,#7c4a1e,#a0621e);color:#fff;}
+  thead th{padding:7px 6px;font-weight:700;font-size:8pt;letter-spacing:.3px;text-transform:uppercase;}
+  tbody tr:nth-child(even){background:#fdf6ec;}
+  tbody tr:nth-child(odd){background:#fff;}
+  tbody tr:hover{background:#f5ead5;}
+  tbody td{padding:6px 6px;border-bottom:1px solid #e8d0a0;vertical-align:middle;}
+  /* COL ENVIADO destaca */
+  .col-enviado{background:rgba(255,200,50,.08);}
+  /* TOTAL */
+  .total-row td{border-top:2.5px solid #7c4a1e!important;font-weight:800;font-size:9.5pt;background:#fdf0dc!important;color:#3a1a00;}
+  /* FIRMAS */
+  .firmas{display:flex;gap:20px;margin-top:16px;}
+  .firma{flex:1;text-align:center;}
+  .firma-linea{border-top:1.5px solid #7c4a1e;padding-top:5px;margin-top:24px;font-size:7.5pt;color:#7c4a1e;font-weight:700;letter-spacing:.5px;}
+  /* PIE */
+  .pie{margin-top:10px;padding-top:8px;border-top:1px dashed #c8a060;display:flex;justify-content:space-between;align-items:center;font-size:6.5pt;color:#a07040;}
+  .pie-nota{font-style:italic;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style></head><body>
+<div class="watermark">${tipo}</div>
+<div class="page">
+  <!-- ENCABEZADO -->
+  <div class="header">
+    <img class="logo" src="${LOGO_B64}" onerror="this.style.display='none'">
+    <div class="header-info">
+      <div class="brand">La Vaca Original</div>
+      <div class="brand-sub">Control de Producción</div>
+    </div>
+    <div class="doc-info">
+      <div class="doc-title">📋 Pedido de Entrega</div>
+      <div class="doc-badge">${tipo}</div>
+    </div>
+  </div>
+  <!-- DATOS -->
+  <div class="datos">
+    <div class="dato"><span class="dato-label">📍 Punto</span><span class="dato-val">${escH(caja.nombre)}</span></div>
+    <div class="dato"><span class="dato-label">🔄 Turno</span><span class="dato-val">${escH(caja.turno)}</span></div>
+    <div class="dato"><span class="dato-label">📅 Fecha</span><span class="dato-val">${fecha}</span></div>
+    <div class="dato"><span class="dato-label">🕐 Hora</span><span class="dato-val">${hora}</span></div>
+    ${cajero?`<div class="dato" style="grid-column:1/-1;"><span class="dato-label">👤 Cajero</span><span class="dato-val">${escH(cajero)}</span></div>`:''}
+  </div>
+  <!-- TABLA -->
+  <table>
+    <thead>
+      <tr>
+        <th style="width:28px;">#</th>
+        <th style="text-align:left;">Producto</th>
+        <th style="width:68px;">Inv. Final</th>
+        <th style="width:68px;">Pedido</th>
+        <th style="width:72px;" class="col-enviado">✅ Enviado</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${filas}
+      <tr class="total-row">
+        <td colspan="2" style="text-align:right;padding-right:10px;">TOTAL PEDIDO</td>
+        <td></td>
+        <td style="text-align:center;color:#1a4a1a;">${totalPedido}</td>
+        <td class="col-enviado"></td>
+      </tr>
+    </tbody>
+  </table>
+  <!-- NOTA -->
+  <div style="margin-top:10px;background:#fff8e8;border-left:3px solid #c8a060;padding:6px 10px;font-size:7.5pt;color:#6b4a1e;border-radius:0 5px 5px 0;">
+    <strong>Nota:</strong> La columna <em>Inv. Final</em> muestra el stock disponible en caja. El alistador debe completar <em>Enviado</em> con las unidades reales despachadas.
+  </div>
+  <!-- FIRMAS -->
+  <div class="firmas">
+    <div class="firma">
+      <div class="firma-linea">Firma Cajero / Responsable</div>
+    </div>
+    <div class="firma">
+      <div class="firma-linea">Firma Alistador / Producción</div>
+    </div>
+    <div class="firma">
+      <div class="firma-linea">Observaciones</div>
+    </div>
+  </div>
+  <!-- PIE -->
+  <div class="pie">
+    <span class="pie-nota">La Vaca Original — Sistema de Control de Pedidos</span>
+    <span>Generado: ${fecha} ${hora}</span>
+  </div>
+</div>
+</body></html>`;
+  };
+
+  // Abrir ventana con las dos copias separadas por salto de página
+  var w = window.open('','_blank','width=760,height=900');
+  if(!w){alert('Por favor permite las ventanas emergentes.');return;}
+  var html1 = htmlCopia('PRODUCCIÓN');
+  var html2 = htmlCopia('CAJERO').replace('<div class="watermark">CAJERO</div>','<div style="page-break-before:always;"></div><div class="watermark">CAJERO</div>');
+  // Insertar ambas copias en un solo documento
+  var combinado = html1.replace('</body></html>',
+    '<div style="page-break-before:always;"></div>'+
+    html2.replace('<!DOCTYPE html><html><head><meta charset="utf-8">','').split('</style></head><body>').slice(1).join('</style></head><body>')+
+    '</body></html>'
+  );
+  w.document.write(combinado);
+  w.document.close();
+  setTimeout(function(){
+    try{w.focus();w.print();}catch(e){}
+  },500);
+  _cajaFromHist=null;
   closeModal('cajaOverlay');
 }
 
