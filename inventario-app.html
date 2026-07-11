@@ -408,10 +408,13 @@ tr.dragging{opacity:.4;}
 </header>
 
 <div class="toolbar">
+  <button class="btn" id="adminToggleBtn" style="background:#3a2f00;color:#ffd166;" onclick="toggleAdminLogin()">🔑 Ingresar como Admin</button>
+  <div class="sep"></div>
   <button class="btn btn-add"   onclick="addRow()">＋ Producto</button>
   <div class="sep"></div>
   <button class="btn btn-close" onclick="cerrarDia()">📅 Cerrar Día</button>
   <button class="btn btn-hist"  onclick="openHist()">📋 Historial</button>
+  <button class="btn" style="background:#1a1f3a;color:#9dc4f0;" onclick="openTrend()">📈 Tendencias</button>
   <div class="sep"></div>
   <button class="btn btn-caja"  onclick="openCajaModal()">🖨 Por Caja</button>
   <button class="btn" style="background:#2a1a3a;color:#c8a8f0;" onclick="openBuscador()">📊 Consultar Producción</button>
@@ -541,6 +544,25 @@ tr.dragging{opacity:.4;}
       <button class="btn btn-print" onclick="printHist()">🖨 Consolidado</button>
       <button class="btn btn-ghost" onclick="closeModal('histDetail')">Cerrar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL TENDENCIAS -->
+<div class="overlay" id="trendOverlay">
+  <div class="modal" style="max-width:700px;">
+    <button class="modal-x" onclick="closeModal('trendOverlay')">✕</button>
+    <div class="modal-title">📈 Tendencia de Diferencias</div>
+    <div class="modal-sub">Faltantes y sobras totales por día de cierre (últimos registros del historial)</div>
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:10px;font-size:.74rem;">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--rojo);display:inline-block;"></span> Faltantes</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:2px;background:var(--verde);display:inline-block;"></span> Sobras</span>
+    </div>
+    <div id="trendChart" style="display:flex;align-items:flex-end;gap:8px;height:180px;padding:10px 6px 0;border-bottom:2px solid var(--negro);overflow-x:auto;"></div>
+    <div id="trendLabels" style="display:flex;gap:8px;padding:4px 6px 0;overflow-x:auto;"></div>
+    <div id="trendEmpty" style="display:none;padding:24px;text-align:center;color:var(--gris4);font-style:italic;font-size:.83rem;">
+      Aún no hay suficiente historial para mostrar una tendencia.
+    </div>
+    <div id="trendSummary" style="margin-top:16px;font-size:.78rem;color:var(--gris4);"></div>
   </div>
 </div>
 
@@ -911,7 +933,7 @@ function buildProd(){
       tdAnt.title='Solo el administrador puede modificar el inventario anterior';
     }
     tr.appendChild(tdAnt);
-    tr.appendChild(mkNum(r,'real'));
+    tr.appendChild(mkReal(r));
     const tdRet=mkNum(r,'retorno'); tdRet.firstChild.style.borderColor='#4a8a4a'; tr.appendChild(tdRet);
 
     const tdDev=mkNum(r,'dev'); tdDev.firstChild.style.borderColor='#e09090'; tr.appendChild(tdDev);
@@ -1018,6 +1040,56 @@ function mkNum(r,field){
   td.appendChild(inp); return td;
 }
 
+// Campo "Realizada": una vez tiene un valor, se bloquea para todos
+// menos el administrador (evita borrados/ediciones accidentales).
+function mkReal(r){
+  const val=r.real;
+  const hasValue=(val!==null&&val!==undefined&&val!=='');
+  const td=document.createElement('td');
+
+  if(hasValue && !isAdmin()){
+    td.className='cell-locked';
+    td.style.cursor='pointer';
+    td.title='Valor ya registrado — solo el administrador puede editarlo o borrarlo';
+    td.innerHTML='<span style="display:inline-flex;align-items:center;gap:4px;justify-content:center;">🔒 '+val+'</span>';
+    td.addEventListener('click',function(){
+      if(requestAdmin()){ buildProd(); }
+    });
+    return td;
+  }
+
+  const inp=document.createElement('input');
+  inp.type='number'; inp.inputMode='decimal'; inp.step='0.5'; inp.min='0';
+  inp.placeholder='—'; inp.style.textAlign='center'; inp._field='real';
+  inp.value=hasValue?val:'';
+  if(hasValue&&isAdmin()){
+    inp.style.borderColor='#e0a030';
+    inp.title='Editando como administrador';
+  }
+  inp.addEventListener('focus',function(){ this.select(); r._localEdit=true; });
+  inp.addEventListener('input',function(){
+    const num=parseFloat(this.value);
+    r.real=isNaN(num)?null:num;
+    r._localEdit=true;
+    calcRow(r); refreshRow(r);
+    debSave(r,'real');
+  });
+  inp.addEventListener('blur',function(){
+    const num=parseFloat(this.value);
+    r.real=isNaN(num)?null:num;
+    this.value=isNaN(num)?'':num;
+    calcRow(r); refreshRow(r);
+    clearTimeout(_debTimers[r.id]);
+    _debTimers[r.id]=null;
+    saveRow(r,'real');
+    setTimeout(()=>{ r._localEdit=false; },800);
+    // Si se acaba de digitar un valor y no hay sesión admin, bloquear ya mismo
+    if(!isNaN(num) && !isAdmin()) buildProd();
+  });
+  td.appendChild(inp);
+  return td;
+}
+
 function refreshRow(r){
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
   set('dispreal-'+r.id,r.dispReal>0?r.dispReal:'');
@@ -1111,6 +1183,29 @@ function updateBadge(){
     b.textContent='👤 Invitado ('+min+'min)';b.style.display='inline-flex';
     b.style.color='#ffa726';
   }else{b.style.display='none';}
+  updateAdminBtn();
+}
+function updateAdminBtn(){
+  const btn=document.getElementById('adminToggleBtn'); if(!btn) return;
+  if(isAdmin()){
+    btn.textContent='🔓 Salir de Admin';
+    btn.style.background='#1a4020'; btn.style.color='#8fe08f';
+  }else{
+    btn.textContent='🔑 Ingresar como Admin';
+    btn.style.background='#3a2f00'; btn.style.color='#ffd166';
+  }
+}
+
+// Botón visible para iniciar/cerrar sesión de administrador
+function toggleAdminLogin(){
+  if(isAdmin()){
+    if(confirm('¿Cerrar sesión de administrador?')){
+      sessionExpiry=0; sessionLevel='';
+      updateBadge(); buildTables();
+    }
+    return;
+  }
+  if(requestAdmin()){ buildTables(); }
 }
 
 // ══ CRUD ══
@@ -2013,6 +2108,77 @@ function abrirEditarEncargado(idx){
   document.getElementById('editEncargadoOverlay').classList.add('open');
 }
 
+
+// ══ TENDENCIAS (faltantes/sobras por día) ══
+function openTrend(){
+  buildTrendChart();
+  document.getElementById('trendOverlay').classList.add('open');
+}
+
+function buildTrendChart(){
+  const chart  = document.getElementById('trendChart');
+  const labels = document.getElementById('trendLabels');
+  const empty  = document.getElementById('trendEmpty');
+  const summary= document.getElementById('trendSummary');
+  chart.innerHTML=''; labels.innerHTML=''; summary.innerHTML='';
+
+  if(!hist.length){
+    empty.style.display='block'; chart.style.display='none'; labels.style.display='none';
+    return;
+  }
+  empty.style.display='none'; chart.style.display='flex'; labels.style.display='flex';
+
+  // hist viene ordenado desc (más reciente primero) — lo invertimos para ver la línea de tiempo
+  const dias = [...hist].reverse().map(h=>{
+    const snap = h.snapshot || [];
+    let falt=0, sobra=0;
+    snap.forEach(s=>{
+      const disp = (s.ant||0)+(s.real||0)+(s.retorno||0)-(s.dev||0);
+      if(s.fin===null||s.fin===undefined) return;
+      const diff = s.fin - disp;
+      if(diff<0) falt += Math.abs(diff);
+      else if(diff>0) sobra += diff;
+    });
+    return {label:h.label||'—', falt, sobra};
+  });
+
+  const maxVal = Math.max(1, ...dias.map(d=>Math.max(d.falt,d.sobra)));
+
+  dias.forEach(d=>{
+    const col=document.createElement('div');
+    col.style.cssText='display:flex;flex-direction:column;align-items:center;gap:2px;min-width:34px;flex:0 0 auto;justify-content:flex-end;height:100%;';
+
+    const bars=document.createElement('div');
+    bars.style.cssText='display:flex;align-items:flex-end;gap:3px;height:100%;';
+
+    const bFalt=document.createElement('div');
+    const hFalt=Math.round((d.falt/maxVal)*140);
+    bFalt.style.cssText='width:12px;border-radius:2px 2px 0 0;background:var(--rojo);height:'+Math.max(hFalt,d.falt>0?3:0)+'px;';
+    bFalt.title='Faltantes: '+d.falt;
+
+    const bSobra=document.createElement('div');
+    const hSobra=Math.round((d.sobra/maxVal)*140);
+    bSobra.style.cssText='width:12px;border-radius:2px 2px 0 0;background:var(--verde);height:'+Math.max(hSobra,d.sobra>0?3:0)+'px;';
+    bSobra.title='Sobras: '+d.sobra;
+
+    bars.appendChild(bFalt); bars.appendChild(bSobra);
+    col.appendChild(bars);
+    chart.appendChild(col);
+
+    const lab=document.createElement('div');
+    lab.style.cssText='min-width:34px;flex:0 0 auto;text-align:center;font-size:.62rem;color:var(--gris4);white-space:nowrap;';
+    lab.textContent=d.label.length>8?d.label.slice(0,8):d.label;
+    labels.appendChild(lab);
+  });
+
+  const totalFalt = dias.reduce((a,d)=>a+d.falt,0);
+  const totalSobra= dias.reduce((a,d)=>a+d.sobra,0);
+  const peor = dias.slice().sort((a,b)=>b.falt-a.falt)[0];
+  summary.innerHTML =
+    'Total faltantes en el periodo: <b style="color:var(--rojo);">'+totalFalt.toFixed(1)+'</b> · '+
+    'Total sobras: <b style="color:var(--verde);">'+totalSobra.toFixed(1)+'</b>'+
+    (peor && peor.falt>0 ? '<br>Día con más faltantes: <b>'+peor.label+'</b> ('+peor.falt.toFixed(1)+')' : '');
+}
 
 // ══ DESPACHOS MÚLTIPLES ══
 // ══ INIT ══
